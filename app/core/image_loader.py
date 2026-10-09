@@ -1,33 +1,32 @@
 from pathlib import Path
 
-
 from app.models.image_model import ImageModel
 
 
 
-SUPPORTED_FORMAT = [
-
+# Set lebih cepat untuk pengecekan
+SUPPORTED_FORMAT = {
     ".jpg",
-
     ".jpeg",
-
     ".png"
-
-]
+}
 
 
 
 def is_supported(file_path):
 
-    return (
+    try:
 
-        Path(file_path)
-        .suffix
-        .lower()
+        return (
+            Path(file_path)
+            .suffix
+            .lower()
+            in SUPPORTED_FORMAT
+        )
 
-        in SUPPORTED_FORMAT
+    except Exception:
 
-    )
+        return False
 
 
 
@@ -36,25 +35,24 @@ def load_files(files):
     images = []
 
 
-
     for file in files:
 
 
-        if not is_supported(file):
+        path = Path(file)
+
+
+        if not is_supported(path):
 
             continue
 
 
-
         try:
 
-
             images.append(
-
-                ImageModel(file)
-
+                ImageModel(
+                    str(path.resolve())
+                )
             )
-
 
 
         except Exception as error:
@@ -63,7 +61,6 @@ def load_files(files):
             print(
                 f"Failed loading image {file}: {error}"
             )
-
 
 
     return images
@@ -75,27 +72,49 @@ def load_folder(folder):
     folder_path = Path(folder)
 
 
-    files = []
+    images = []
+
+
+    if not folder_path.exists():
+
+        return images
 
 
 
-    for file in folder_path.rglob("*"):
+    # Scan hanya file dengan extension target
+    for extension in SUPPORTED_FORMAT:
 
 
-        if (
-
-            file.is_file()
-
-            and is_supported(file)
-
+        for file in folder_path.rglob(
+                f"*{extension}"
         ):
 
-            files.append(
 
-                str(file)
+            if not file.is_file():
 
-            )
-
+                continue
 
 
-    return load_files(files)
+
+            try:
+
+
+                images.append(
+
+                    ImageModel(
+                        str(file.resolve())
+                    )
+
+                )
+
+
+            except Exception as error:
+
+
+                print(
+                    f"Failed loading image {file}: {error}"
+                )
+
+
+
+    return images

@@ -1,9 +1,4 @@
-from app.core.converter import convert_image
-
-
-from app.utils.file_utils import (
-    create_output_path
-)
+from app.core.process_pool import ProcessPoolManager
 
 
 
@@ -17,6 +12,9 @@ class ProcessManager:
         self.failed = 0
 
         self.cancelled = False
+
+
+        self.pool = ProcessPoolManager()
 
 
 
@@ -34,6 +32,7 @@ class ProcessManager:
             on_file=None,
             on_progress=None
     ):
+
 
         self.success = 0
 
@@ -61,100 +60,79 @@ class ProcessManager:
 
 
 
-        for index, image in enumerate(images, start=1):
-
-
-            if self.cancelled:
-
-                break
-
-
+        def handle_file(filename):
 
             if on_file:
 
-                on_file(
-                    image.filename
-                )
+                on_file(filename)
 
 
 
-            try:
+        def handle_progress(
+                progress,
+                success,
+                failed
+        ):
 
+            self.success = success
 
-                output_path = create_output_path(
-
-                    image.path,
-
-                    output_folder
-
-                )
-
-
-
-                result = convert_image(
-
-                    image.path,
-
-                    output_path,
-
-                    mode=settings["mode"],
-
-                    quality=settings["quality"]
-
-                )
-
-
-
-                if result:
-
-                    self.success += 1
-
-
-                else:
-
-                    self.failed += 1
-
-
-
-            except Exception as error:
-
-
-                print(
-                    f"Processing failed: {error}"
-                )
-
-
-                self.failed += 1
-
-
-
-            progress = int(
-
-                (index / total) * 100
-
-            )
-
+            self.failed = failed
 
 
             if on_progress:
 
                 on_progress(
-
                     progress,
-
-                    self.success,
-
-                    self.failed
-
+                    success,
+                    failed
                 )
+
+
+
+        try:
+
+
+            result = self.pool.process(
+
+                images,
+
+                settings,
+
+                output_folder,
+
+                on_file=handle_file,
+
+                on_progress=handle_progress
+
+            )
+
+
+            self.success = result["success"]
+
+            self.failed = result["failed"]
+
+
+
+        except Exception as error:
+
+
+            print(
+                f"Process manager error: {error}"
+            )
+
+
+            self.failed = total
 
 
 
         return {
 
+
             "success": self.success,
 
+
             "failed": self.failed,
+
 
             "cancelled": self.cancelled
 

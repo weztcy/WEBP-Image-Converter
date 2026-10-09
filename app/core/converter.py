@@ -1,4 +1,9 @@
 from PIL import Image
+from pathlib import Path
+
+
+
+WEBP_METHOD = 4
 
 
 
@@ -8,41 +13,75 @@ def convert_image(
         mode="lossless",
         quality=80
 ):
+    """
+    High performance WEBP converter.
+
+    Optimized for:
+    - multiprocessing
+    - batch conversion
+    - low memory usage
+    """
+
+
+    image = None
+
 
     try:
 
-        with Image.open(source_path) as image:
 
+        # Open image
+        image = Image.open(
+            source_path
+        )
+
+
+        # ==========================
+        # COLOR MODE OPTIMIZATION
+        # ==========================
+
+        if image.mode not in (
+            "RGB",
+            "RGBA"
+        ):
 
             image = image.convert(
                 "RGBA"
             )
 
 
-            if mode == "lossless":
 
-                image.save(
-                    output_path,
-                    "WEBP",
-                    lossless=True
-                )
+        # ==========================
+        # WEBP ENCODE
+        # ==========================
 
-
-            elif mode == "lossy":
-
-                image.save(
-                    output_path,
-                    "WEBP",
-                    quality=quality,
-                    lossless=False
-                )
+        if mode == "lossless":
 
 
-            else:
+            image.save(
+                output_path,
+                "WEBP",
+                lossless=True,
+                method=WEBP_METHOD
+            )
 
-                raise ValueError(
-                    "Invalid conversion mode"
-                )
+
+        elif mode == "lossy":
+
+
+            image.save(
+                output_path,
+                "WEBP",
+                quality=int(quality),
+                lossless=False,
+                method=WEBP_METHOD
+            )
+
+
+        else:
+
+            raise ValueError(
+                "Invalid conversion mode"
+            )
 
 
         return True
@@ -58,3 +97,12 @@ def convert_image(
 
 
         return False
+
+
+
+    finally:
+
+
+        if image is not None:
+
+            image.close()

@@ -7,6 +7,10 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 
 
+from app.core.thumbnail_cache import ThumbnailCache
+
+
+
 
 class ImagePreview(QLabel):
 
@@ -14,6 +18,11 @@ class ImagePreview(QLabel):
     def __init__(self):
 
         super().__init__()
+
+
+        self.preview_cache = ThumbnailCache(
+            size=800
+        )
 
 
         self.setAlignment(
@@ -32,6 +41,7 @@ class ImagePreview(QLabel):
 
     def show_image(self, image):
 
+
         if image is None:
 
             self.show_empty()
@@ -40,8 +50,25 @@ class ImagePreview(QLabel):
 
 
 
+        preview_path = (
+            self.preview_cache
+            .create_preview(
+                image.path
+            )
+        )
+
+
+
+        if preview_path is None:
+
+            self.show_empty()
+
+            return
+
+
+
         pixmap = QPixmap(
-            str(image.path)
+            str(preview_path)
         )
 
 
@@ -74,6 +101,7 @@ class ImagePreview(QLabel):
 
 
     def show_empty(self):
+
 
         self.clear()
 

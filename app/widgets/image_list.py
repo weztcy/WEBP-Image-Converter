@@ -4,16 +4,16 @@ from PySide6.QtWidgets import (
 )
 
 
-from PySide6.QtGui import (
-    QIcon,
-    QPixmap
-)
+from PySide6.QtGui import QIcon
 
 
 from PySide6.QtCore import (
     QSize,
     Signal
 )
+
+
+from app.core.thumbnail_cache import ThumbnailCache
 
 
 
@@ -32,6 +32,11 @@ class ImageList(QListWidget):
         self.current_selected_item = None
 
 
+        # Thumbnail engine
+        self.thumbnail_cache = ThumbnailCache(
+            size=100
+        )
+
 
         self.setIconSize(
             QSize(70, 70)
@@ -46,6 +51,7 @@ class ImageList(QListWidget):
 
     def add_images(self, images):
 
+
         for image in images:
 
 
@@ -53,17 +59,16 @@ class ImageList(QListWidget):
 
 
 
-            pixmap = QPixmap(
-                str(image.path)
+            # ==========================
+            # THUMBNAIL CACHE
+            # ==========================
+
+            pixmap = self.thumbnail_cache.get_pixmap(
+                image.path
             )
 
 
             if not pixmap.isNull():
-
-                pixmap = pixmap.scaled(
-                    70,
-                    70
-                )
 
 
                 item.setIcon(
@@ -128,6 +133,7 @@ class ImageList(QListWidget):
 
     def remove_selected(self):
 
+
         selected = self.currentItem()
 
 
@@ -148,6 +154,7 @@ class ImageList(QListWidget):
 
     def clear(self):
 
+
         super().clear()
 
 
@@ -156,6 +163,7 @@ class ImageList(QListWidget):
 
 
     def format_size(self, size):
+
 
         kb = size / 1024
 
