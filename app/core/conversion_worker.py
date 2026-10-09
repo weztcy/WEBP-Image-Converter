@@ -1,22 +1,33 @@
 from app.core.converter import convert_image
-from app.utils.file_utils import create_output_path
+
+from app.models.process_result import ProcessResult
+
+
 
 
 
 def process_single_image(task):
     """
-    High performance multiprocessing worker.
+    High performance WEBP conversion worker.
 
     Task format:
 
     (
-        image_path,
-        output_folder,
+        input_path,
+        output_path,
         mode,
-        quality
+        quality,
+        method
     )
 
+    Worker:
+        input image
+        ↓
+        WEBP encoding
+        ↓
+        return result
     """
+
 
 
     image_path = None
@@ -27,37 +38,38 @@ def process_single_image(task):
 
         (
             image_path,
-            output_folder,
+            output_path,
             mode,
-            quality
+            quality,
+            method
 
         ) = task
 
 
 
-        output_path = create_output_path(
-            image_path,
-            output_folder
-        )
-
-
-
         success = convert_image(
-            image_path,
-            output_path,
+
+            source_path=image_path,
+
+            output_path=output_path,
+
             mode=mode,
-            quality=quality
+
+            quality=quality,
+
+            method=method
+
         )
 
 
 
-        return (
+        return ProcessResult(
 
-            success,
+            success=success,
 
-            image_path,
+            file=image_path,
 
-            str(output_path)
+            output=output_path
 
         )
 
@@ -66,12 +78,12 @@ def process_single_image(task):
     except Exception as error:
 
 
-        return (
+        return ProcessResult(
 
-            False,
+            success=False,
 
-            image_path,
+            file=image_path,
 
-            str(error)
+            output=str(error)
 
         )

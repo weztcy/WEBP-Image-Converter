@@ -11,10 +11,18 @@ from PySide6.QtCore import Signal
 
 
 
+
+
 class ProcessStatus(QWidget):
 
 
+    # ==========================
+    # SIGNAL
+    # ==========================
+
+
     open_folder_clicked = Signal()
+
 
     cancel_clicked = Signal()
 
@@ -29,7 +37,15 @@ class ProcessStatus(QWidget):
 
 
 
+
+
+    # ==========================
+    # UI
+    # ==========================
+
+
     def init_ui(self):
+
 
         layout = QVBoxLayout()
 
@@ -48,9 +64,16 @@ class ProcessStatus(QWidget):
         self.progress_bar = QProgressBar()
 
 
+        self.progress_bar.setRange(
+            0,
+            100
+        )
+
+
         self.progress_bar.setValue(
             0
         )
+
 
 
         self.success_label = QLabel(
@@ -84,14 +107,25 @@ class ProcessStatus(QWidget):
 
 
 
+        # ==========================
+        # SIGNAL CONNECTION
+        # ==========================
+
+
         self.open_folder_button.clicked.connect(
+
             self.open_folder_clicked.emit
+
         )
 
 
         self.cancel_button.clicked.connect(
-            self.cancel_clicked.emit
+
+            self.handle_cancel
+
         )
+
+
 
 
 
@@ -129,12 +163,34 @@ class ProcessStatus(QWidget):
 
 
 
-    # =========================
+
+
+    # ==========================
+    # BUTTON ACTION
+    # ==========================
+
+
+    def handle_cancel(self):
+
+
+        self.cancel_button.setEnabled(
+            False
+        )
+
+
+        self.cancel_clicked.emit()
+
+
+
+
+
+    # ==========================
     # STATUS CONTROL
-    # =========================
+    # ==========================
 
 
     def set_processing(self):
+
 
         self.title_label.setText(
             "Processing Status: Processing"
@@ -146,11 +202,19 @@ class ProcessStatus(QWidget):
         )
 
 
+        self.cancel_button.setEnabled(
+            True
+        )
+
+
         self.cancel_button.show()
 
 
 
+
+
     def set_completed(self):
+
 
         self.title_label.setText(
             "Processing Status: Completed"
@@ -166,7 +230,10 @@ class ProcessStatus(QWidget):
 
 
 
+
+
     def set_cancelled(self):
+
 
         self.title_label.setText(
             "Processing Status: Cancelled"
@@ -182,7 +249,10 @@ class ProcessStatus(QWidget):
 
 
 
+
+
     def set_idle(self):
+
 
         self.title_label.setText(
             "Processing Status: Idle"
@@ -198,24 +268,68 @@ class ProcessStatus(QWidget):
 
 
 
-    # =========================
-    # UPDATE DATA
-    # =========================
 
 
-    def update_file(self, filename):
+    # ==========================
+    # UPDATE
+    # ==========================
 
-        self.current_file_label.setText(
-            f"Current File: {filename}"
+
+    def update_file(
+            self,
+            filename
+    ):
+
+
+        if filename:
+
+
+            self.current_file_label.setText(
+
+                f"Current File: {filename}"
+
+            )
+
+
+        else:
+
+
+            self.current_file_label.setText(
+
+                "Current File: -"
+
+            )
+
+
+
+
+
+    def update_progress(
+            self,
+            value
+    ):
+
+
+        value = max(
+
+            0,
+
+            min(
+
+                value,
+
+                100
+
+            )
+
         )
 
-
-
-    def update_progress(self, value):
 
         self.progress_bar.setValue(
             value
         )
+
+
 
 
 
@@ -225,33 +339,92 @@ class ProcessStatus(QWidget):
             failed
     ):
 
+
         self.success_label.setText(
+
             f"Success: {success}"
+
         )
 
 
         self.failed_label.setText(
+
             f"Failed: {failed}"
+
         )
 
 
 
+
+
+    # ==========================
+    # THREAD CALLBACK READY
+    # ==========================
+
+
+    def update_status(
+            self,
+            progress,
+            success,
+            failed
+    ):
+
+
+        self.update_progress(
+
+            progress
+
+        )
+
+
+        self.update_result(
+
+            success,
+
+            failed
+
+        )
+
+
+
+
+
+    # ==========================
+    # RESET
+    # ==========================
+
+
     def reset(self):
+
 
         self.set_idle()
 
 
         self.current_file_label.setText(
+
             "Current File: -"
+
         )
 
 
         self.progress_bar.setValue(
+
             0
+
         )
 
 
         self.update_result(
+
             0,
+
             0
+
+        )
+
+
+        self.cancel_button.setEnabled(
+
+            True
+
         )

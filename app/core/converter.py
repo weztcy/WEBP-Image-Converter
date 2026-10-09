@@ -1,9 +1,17 @@
-from PIL import Image
 from pathlib import Path
 
+from PIL import Image
 
 
-WEBP_METHOD = 4
+
+DEFAULT_WEBP_METHOD = 2
+
+
+
+SUPPORTED_MODES = (
+    "lossless",
+    "lossy"
+)
 
 
 
@@ -11,7 +19,8 @@ def convert_image(
         source_path,
         output_path,
         mode="lossless",
-        quality=80
+        quality=80,
+        method=DEFAULT_WEBP_METHOD
 ):
     """
     High performance WEBP converter.
@@ -23,68 +32,203 @@ def convert_image(
     """
 
 
+
     image = None
+
 
 
     try:
 
 
-        # Open image
-        image = Image.open(
+        source_path = Path(
             source_path
         )
 
 
+        output_path = Path(
+            output_path
+        )
+
+
+
         # ==========================
-        # COLOR MODE OPTIMIZATION
+        # VALIDATION
         # ==========================
 
-        if image.mode not in (
-            "RGB",
-            "RGBA"
-        ):
 
-            image = image.convert(
-                "RGBA"
+        if mode not in SUPPORTED_MODES:
+
+            raise ValueError(
+                f"Invalid mode: {mode}"
+            )
+
+
+
+        method = max(
+
+            0,
+
+            min(
+
+                int(method),
+
+                6
+
+            )
+
+        )
+
+
+
+        if mode == "lossy":
+
+            quality = max(
+
+                1,
+
+                min(
+
+                    int(quality),
+
+                    100
+
+                )
+
             )
 
 
 
         # ==========================
-        # WEBP ENCODE
+        # OUTPUT
         # ==========================
+
+
+        output_path.parent.mkdir(
+
+            parents=True,
+
+            exist_ok=True
+
+        )
+
+
+
+        # ==========================
+        # LOAD IMAGE
+        # ==========================
+
+
+        image = Image.open(
+
+            source_path
+
+        )
+
+
+
+        # ==========================
+        # COLOR OPTIMIZATION
+        # ==========================
+
+
+        if image.mode not in (
+
+            "RGB",
+
+            "RGBA"
+
+        ):
+
+
+            if "transparency" in image.info:
+
+
+                converted = image.convert(
+
+                    "RGBA"
+
+                )
+
+
+            else:
+
+
+                converted = image.convert(
+
+                    "RGB"
+
+                )
+
+
+
+            image.close()
+
+
+            image = converted
+
+
+
+
+
+        # ==========================
+        # WEBP OPTIONS
+        # ==========================
+
+
+        options = {
+
+            "format":
+                "WEBP",
+
+            "method":
+                method
+
+        }
+
+
 
         if mode == "lossless":
 
 
-            image.save(
-                output_path,
-                "WEBP",
-                lossless=True,
-                method=WEBP_METHOD
-            )
+            options.update({
 
+                "lossless": True
 
-        elif mode == "lossy":
+            })
 
-
-            image.save(
-                output_path,
-                "WEBP",
-                quality=int(quality),
-                lossless=False,
-                method=WEBP_METHOD
-            )
 
 
         else:
 
-            raise ValueError(
-                "Invalid conversion mode"
-            )
+
+            options.update({
+
+                "lossless": False,
+
+                "quality": quality
+
+            })
+
+
+
+        # ==========================
+        # SAVE
+        # ==========================
+
+
+        image.save(
+
+            output_path,
+
+            **options
+
+        )
+
 
 
         return True
+
+
 
 
 
@@ -92,7 +236,9 @@ def convert_image(
 
 
         print(
+
             f"Conversion failed: {error}"
+
         )
 
 
@@ -100,9 +246,12 @@ def convert_image(
 
 
 
+
+
     finally:
 
 
         if image is not None:
+
 
             image.close()

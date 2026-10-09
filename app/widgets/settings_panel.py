@@ -3,11 +3,17 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QRadioButton,
     QLabel,
-    QSlider
+    QSlider,
+    QGroupBox
 )
 
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import (
+    Qt,
+    Signal
+)
+
+
 
 
 
@@ -27,15 +33,32 @@ class SettingsPanel(QWidget):
 
 
 
+
+
+    # =================================
+    # UI INITIALIZATION
+    # =================================
+
+
     def init_ui(self):
+
 
         layout = QVBoxLayout()
 
 
 
-        self.lossless_radio = QRadioButton(
-            "Lossless"
+        # =================================
+        # COMPRESSION MODE
+        # =================================
+
+
+        mode_group = QGroupBox(
+            "Compression Mode"
         )
+
+
+        mode_layout = QVBoxLayout()
+
 
 
         self.lossy_radio = QRadioButton(
@@ -43,10 +66,46 @@ class SettingsPanel(QWidget):
         )
 
 
+        self.lossless_radio = QRadioButton(
+            "Lossless"
+        )
 
-        self.lossless_radio.setChecked(
+
+        self.lossy_radio.setChecked(
             True
         )
+
+
+
+        mode_layout.addWidget(
+            self.lossy_radio
+        )
+
+
+        mode_layout.addWidget(
+            self.lossless_radio
+        )
+
+
+        mode_group.setLayout(
+            mode_layout
+        )
+
+
+
+
+
+        # =================================
+        # QUALITY CONTROL
+        # =================================
+
+
+        quality_group = QGroupBox(
+            "Quality"
+        )
+
+
+        quality_layout = QVBoxLayout()
 
 
 
@@ -60,12 +119,8 @@ class SettingsPanel(QWidget):
         )
 
 
-        self.quality_slider.setMinimum(
-            1
-        )
-
-
-        self.quality_slider.setMaximum(
+        self.quality_slider.setRange(
+            1,
             100
         )
 
@@ -76,19 +131,102 @@ class SettingsPanel(QWidget):
 
 
         self.quality_slider.setEnabled(
-            False
+            True
         )
 
 
 
-        self.lossless_radio.clicked.connect(
+        quality_layout.addWidget(
+            self.quality_label
+        )
+
+
+        quality_layout.addWidget(
+            self.quality_slider
+        )
+
+
+        quality_group.setLayout(
+            quality_layout
+        )
+
+
+
+
+
+        # =================================
+        # PERFORMANCE PROFILE
+        # =================================
+
+
+        profile_group = QGroupBox(
+            "Performance Profile"
+        )
+
+
+        profile_layout = QVBoxLayout()
+
+
+
+        self.fast_radio = QRadioButton(
+            "Fast Conversion"
+        )
+
+
+        self.standard_radio = QRadioButton(
+            "Standard Quality"
+        )
+
+
+        self.compression_radio = QRadioButton(
+            "Maximum Compression"
+        )
+
+
+
+        self.fast_radio.setChecked(
+            True
+        )
+
+
+
+        profile_layout.addWidget(
+            self.fast_radio
+        )
+
+
+        profile_layout.addWidget(
+            self.standard_radio
+        )
+
+
+        profile_layout.addWidget(
+            self.compression_radio
+        )
+
+
+        profile_group.setLayout(
+            profile_layout
+        )
+
+
+
+
+
+        # =================================
+        # SIGNAL CONNECTION
+        # =================================
+
+
+        self.lossy_radio.toggled.connect(
             self.update_state
         )
 
 
-        self.lossy_radio.clicked.connect(
+        self.lossless_radio.toggled.connect(
             self.update_state
         )
+
 
 
         self.quality_slider.valueChanged.connect(
@@ -97,25 +235,42 @@ class SettingsPanel(QWidget):
 
 
 
+        self.fast_radio.toggled.connect(
+            self.emit_settings
+        )
+
+
+        self.standard_radio.toggled.connect(
+            self.emit_settings
+        )
+
+
+        self.compression_radio.toggled.connect(
+            self.emit_settings
+        )
+
+
+
+
+
+        # =================================
+        # ADD COMPONENT
+        # =================================
+
+
         layout.addWidget(
-            self.lossless_radio
+            mode_group
         )
 
 
         layout.addWidget(
-            self.lossy_radio
+            quality_group
         )
 
 
         layout.addWidget(
-            self.quality_label
+            profile_group
         )
-
-
-        layout.addWidget(
-            self.quality_slider
-        )
-
 
 
         self.setLayout(
@@ -123,13 +278,26 @@ class SettingsPanel(QWidget):
         )
 
 
+
         self.emit_settings()
 
 
 
+
+
+    # =================================
+    # STATE UPDATE
+    # =================================
+
+
     def update_state(self):
 
-        is_lossy = self.lossy_radio.isChecked()
+
+        is_lossy = (
+
+            self.lossy_radio.isChecked()
+
+        )
 
 
 
@@ -142,10 +310,18 @@ class SettingsPanel(QWidget):
 
 
 
-    def update_quality(self, value):
+
+
+    def update_quality(
+            self,
+            value
+    ):
+
 
         self.quality_label.setText(
+
             f"Quality: {value}"
+
         )
 
 
@@ -153,31 +329,107 @@ class SettingsPanel(QWidget):
 
 
 
+
+
+    # =================================
+    # PROFILE
+    # =================================
+
+
+    def get_profile(self):
+
+
+        if self.standard_radio.isChecked():
+
+            return "balanced"
+
+
+
+        if self.compression_radio.isChecked():
+
+            return "compression"
+
+
+
+        return "fast"
+
+
+
+
+
+    # =================================
+    # SETTINGS BUILDER
+    # =================================
+
+
     def build_settings(self):
+
+
+        mode = (
+
+            "lossy"
+
+            if self.lossy_radio.isChecked()
+
+            else "lossless"
+
+        )
+
+
 
         return {
 
-            "mode":
-                "lossy"
-                if self.lossy_radio.isChecked()
-                else "lossless",
 
+            "mode": mode,
+
+
+
+            # Quality hanya berlaku untuk lossy
 
             "quality":
+
                 self.quality_slider.value()
+
+                if mode == "lossy"
+
+                else None,
+
+
+
+            "profile":
+
+                self.get_profile()
 
         }
 
 
 
+
+
+    # =================================
+    # SIGNAL EMIT
+    # =================================
+
+
     def emit_settings(self):
 
+
         self.settings_changed.emit(
+
             self.build_settings()
+
         )
 
 
 
+
+
+    # =================================
+    # PUBLIC API
+    # =================================
+
+
     def get_settings(self):
+
 
         return self.build_settings()

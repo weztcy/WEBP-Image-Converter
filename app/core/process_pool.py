@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 from concurrent.futures import (
     ProcessPoolExecutor,
     as_completed
@@ -14,6 +17,18 @@ from app.core.performance_config import (
 )
 
 
+from app.core.webp_profile import (
+    get_webp_method
+)
+
+
+from app.utils.file_utils import (
+    create_output_path
+)
+
+
+
+
 
 class ProcessPoolManager:
 
@@ -28,15 +43,15 @@ class ProcessPoolManager:
         # HARDWARE DETECTION
         # ==================================
 
+
         if workers is None:
 
 
             config = PerformanceConfig()
 
 
-            workers = (
-                config.calculate_workers()
-            )
+            workers = config.calculate_workers()
+
 
 
             print(
@@ -61,10 +76,77 @@ class ProcessPoolManager:
         self.workers = workers
 
 
+        self.cancelled = False
+
+
+        self.executor = None
+
+
+        self.futures = []
+
+
+
         print(
             f"Workers active: {self.workers}"
         )
 
+
+
+
+
+    # ==================================
+    # CANCEL
+    # ==================================
+
+
+    def cancel(self):
+
+
+        self.cancelled = True
+
+
+
+        for future in self.futures:
+
+
+            future.cancel()
+
+
+
+
+
+    # ==================================
+    # FILE SIZE
+    # ==================================
+
+
+    def get_file_size(
+            self,
+            path
+    ):
+
+
+        try:
+
+
+            return Path(
+                path
+            ).stat().st_size
+
+
+
+        except Exception:
+
+
+            return 0
+
+
+
+
+
+    # ==================================
+    # CREATE TASK
+    # ==================================
 
 
     def create_task(
@@ -75,26 +157,51 @@ class ProcessPoolManager:
     ):
 
 
-        """
-        Lightweight task object.
+        output_path = create_output_path(
 
-        Tuple lebih ringan dibanding dictionary
-        untuk multiprocessing serialization.
-        """
+            str(image.path),
+
+            output_folder
+
+        )
+
+
+
+        method = get_webp_method(
+
+            settings.get(
+
+                "profile",
+
+                "fast"
+
+            )
+
+        )
+
 
 
         return (
 
             str(image.path),
 
-            str(output_folder),
+            str(output_path),
 
             settings["mode"],
 
-            settings["quality"]
+            settings["quality"],
+
+            method
 
         )
 
+
+
+
+
+    # ==================================
+    # PROCESS
+    # ==================================
 
 
     def process(
@@ -105,6 +212,13 @@ class ProcessPoolManager:
             on_file=None,
             on_progress=None
     ):
+
+
+        self.cancelled = False
+
+
+        self.futures.clear()
+
 
 
         total = len(images)
@@ -118,44 +232,72 @@ class ProcessPoolManager:
 
                 "success": 0,
 
-                "failed": 0
+                "failed": 0,
+
+                "cancelled": False,
+
+                "input_bytes": 0,
+
+                "output_bytes": 0,
+
+                "saved_percent": 0
 
             }
 
 
 
+
         success = 0
+
 
         failed = 0
 
 
 
-        # ==================================
-        # ADAPTIVE WORKER COUNT
-        # ==================================
+        input_bytes = 0
+
+
+        output_bytes = 0
+
+
+
+
 
         active_workers = min(
+
             self.workers,
+
             total
+
         )
+
 
 
         print(
+
             f"Active workers for job: {active_workers}"
+
         )
 
 
 
+
+
         # ==================================
-        # CREATE TASKS
+        # CREATE TASK
         # ==================================
+
 
         tasks = [
 
             self.create_task(
+
                 image,
+
                 settings,
+
                 output_folder
+
             )
 
             for image in images
@@ -164,37 +306,88 @@ class ProcessPoolManager:
 
 
 
+        # calculate original size
+
+
+        for task in tasks:
+
+
+            input_bytes += self.get_file_size(
+
+                task[0]
+
+            )
+
+
+
+
+
         # ==================================
-        # PROCESS EXECUTION
+        # PROCESS POOL
         # ==================================
 
-        with ProcessPoolExecutor(
-                max_workers=active_workers
-        ) as executor:
+
+        self.executor = ProcessPoolExecutor(
+
+            max_workers=active_workers
+
+        )
 
 
 
-            futures = [
+        try:
 
-                executor.submit(
+
+
+            for task in tasks:
+
+
+                if self.cancelled:
+
+
+                    break
+
+
+
+                future = self.executor.submit(
+
                     process_single_image,
+
                     task
+
                 )
 
-                for task in tasks
 
-            ]
+                self.futures.append(
+
+                    future
+
+                )
+
+
 
 
 
             # ==================================
-            # COLLECT RESULT
+            # RESULT COLLECTION
             # ==================================
+
 
             for index, future in enumerate(
-                    as_completed(futures),
+
+                    as_completed(self.futures),
+
                     start=1
+
             ):
+
+
+
+                if self.cancelled:
+
+
+                    break
+
 
 
                 try:
@@ -208,42 +401,42 @@ class ProcessPoolManager:
 
 
                     print(
+
                         f"Worker failed: {error}"
+
                     )
 
 
                     failed += 1
 
+
                     continue
 
 
 
-                # ==================================
-                # RESULT FORMAT:
-                #
-                # (
-                #    success,
-                #    file_path,
-                #    output_path/error
-                # )
-                #
-                # ==================================
 
 
-                result_success = result[0]
+                if result.success:
 
-                file_path = result[1]
-
-
-
-                if result_success:
 
                     success += 1
 
 
+
+                    output_bytes += self.get_file_size(
+
+                        result.output
+
+                    )
+
+
+
                 else:
 
+
                     failed += 1
+
+
 
 
 
@@ -251,12 +444,17 @@ class ProcessPoolManager:
                 # FILE CALLBACK
                 # ==================================
 
+
                 if on_file:
 
 
                     on_file(
-                        file_path
+
+                        result.file
+
                     )
+
+
 
 
 
@@ -264,20 +462,28 @@ class ProcessPoolManager:
                 # PROGRESS CALLBACK
                 # ==================================
 
+
                 if on_progress:
 
 
                     progress = int(
 
                         (
+
                             index
+
                             /
+
                             total
+
                         )
+
                         *
+
                         100
 
                     )
+
 
 
                     on_progress(
@@ -292,12 +498,97 @@ class ProcessPoolManager:
 
 
 
+
+
+        finally:
+
+
+
+            if self.executor:
+
+
+                self.executor.shutdown(
+
+                    wait=False,
+
+                    cancel_futures=True
+
+                )
+
+
+                self.executor = None
+
+
+
+
+
+        # ==================================
+        # COMPRESSION STATISTICS
+        # ==================================
+
+
+        saved_percent = 0
+
+
+
+        if input_bytes > 0:
+
+
+            saved_percent = (
+
+                (
+
+                    input_bytes
+
+                    -
+
+                    output_bytes
+
+                )
+
+                /
+
+                input_bytes
+
+            ) * 100
+
+
+
+
+
         return {
 
 
-            "success": success,
+            "success":
+
+                success,
 
 
-            "failed": failed
+            "failed":
+
+                failed,
+
+
+            "cancelled":
+
+                self.cancelled,
+
+
+
+            "input_bytes":
+
+                input_bytes,
+
+
+
+            "output_bytes":
+
+                output_bytes,
+
+
+
+            "saved_percent":
+
+                saved_percent
 
         }

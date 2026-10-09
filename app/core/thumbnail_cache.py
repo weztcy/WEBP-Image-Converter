@@ -1,8 +1,12 @@
 from pathlib import Path
-from PIL import Image
-from PySide6.QtGui import QPixmap
 
 import hashlib
+
+from PIL import Image
+
+from PySide6.QtGui import QPixmap
+
+
 
 
 
@@ -15,56 +19,136 @@ class ThumbnailCache:
             size=100
     ):
 
+
         self.size = size
+
 
 
         if cache_folder is None:
 
+
             cache_folder = (
+
                 Path.home()
+
                 /
+
                 ".webp_converter_cache"
-                /
-                "thumbnails"
+
             )
 
 
+
         self.cache_folder = Path(
+
             cache_folder
+
         )
 
 
-        self.cache_folder.mkdir(
+
+        self.thumbnail_folder = (
+
+            self.cache_folder
+
+            /
+
+            "thumbnails"
+
+        )
+
+
+
+        self.preview_folder = (
+
+            self.cache_folder
+
+            /
+
+            "previews"
+
+        )
+
+
+
+        self.thumbnail_folder.mkdir(
+
             parents=True,
+
             exist_ok=True
+
+        )
+
+
+        self.preview_folder.mkdir(
+
+            parents=True,
+
+            exist_ok=True
+
         )
 
 
 
-    def get_cache_path(
+        # RAM cache
+
+        self.memory_cache = {}
+
+
+
+
+
+    # ==================================
+    # CACHE KEY
+    # ==================================
+
+
+    def get_key(
             self,
             image_path
     ):
 
 
-        """
-        Membuat nama cache unik
-        berdasarkan path gambar
-        """
+        image_path = Path(
+
+            image_path
+
+        )
 
 
-        key = hashlib.md5(
+        stat = image_path.stat()
+
+
+
+        raw = (
+
             str(image_path)
-            .encode()
+
+            +
+
+            str(stat.st_mtime)
+
+            +
+
+            str(stat.st_size)
+
+        )
+
+
+
+        return hashlib.md5(
+
+            raw.encode()
+
         ).hexdigest()
 
 
-        return (
-            self.cache_folder
-            /
-            f"{key}.jpg"
-        )
 
+
+
+    # ==================================
+    # THUMBNAIL
+    # ==================================
 
 
     def create_thumbnail(
@@ -73,20 +157,31 @@ class ThumbnailCache:
     ):
 
 
-        image_path = Path(
+        key = self.get_key(
+
             image_path
+
         )
 
 
-        cache_path = self.get_cache_path(
-            image_path
+
+        cache_path = (
+
+            self.thumbnail_folder
+
+            /
+
+            f"{key}.webp"
+
         )
 
 
-        # Jika sudah ada cache
+
         if cache_path.exists():
 
+
             return cache_path
+
 
 
 
@@ -94,32 +189,48 @@ class ThumbnailCache:
 
 
             with Image.open(
-                    image_path
+
+                image_path
+
             ) as image:
 
 
+
                 image.thumbnail(
+
                     (
+
                         self.size,
+
                         self.size
+
                     )
+
                 )
 
 
-                # Thumbnail cukup RGB
+
                 if image.mode != "RGB":
 
+
                     image = image.convert(
+
                         "RGB"
+
                     )
+
 
 
                 image.save(
+
                     cache_path,
-                    "JPEG",
-                    quality=85,
-                    optimize=True
+
+                    "WEBP",
+
+                    quality=75
+
                 )
+
 
 
             return cache_path
@@ -130,12 +241,135 @@ class ThumbnailCache:
 
 
             print(
-                f"Thumbnail failed {image_path}: {error}"
+
+                f"Thumbnail error: {error}"
+
             )
 
 
             return None
 
+
+
+
+
+    # ==================================
+    # PREVIEW
+    # ==================================
+
+
+    def create_preview(
+            self,
+            image_path,
+            size=400
+    ):
+
+
+        key = self.get_key(
+
+            image_path
+
+        )
+
+
+
+        cache_path = (
+
+            self.preview_folder
+
+            /
+
+            f"{key}.webp"
+
+        )
+
+
+
+        if cache_path.exists():
+
+
+            return cache_path
+
+
+
+
+        try:
+
+
+            with Image.open(
+
+                image_path
+
+            ) as image:
+
+
+
+                image.thumbnail(
+
+                    (
+
+                        size,
+
+                        size
+
+                    )
+
+                )
+
+
+
+                if image.mode not in (
+
+                    "RGB",
+
+                    "RGBA"
+
+                ):
+
+
+                    image = image.convert(
+
+                        "RGBA"
+
+                    )
+
+
+
+                image.save(
+
+                    cache_path,
+
+                    "WEBP",
+
+                    quality=85
+
+                )
+
+
+
+            return cache_path
+
+
+
+        except Exception as error:
+
+
+            print(
+
+                f"Preview error: {error}"
+
+            )
+
+
+            return None
+
+
+
+
+
+    # ==================================
+    # PIXMAP
+    # ==================================
 
 
     def get_pixmap(
@@ -144,84 +378,46 @@ class ThumbnailCache:
     ):
 
 
-        thumbnail = self.create_thumbnail(
+        key = str(
+
             image_path
+
         )
 
 
+
+        if key in self.memory_cache:
+
+
+            return self.memory_cache[key]
+
+
+
+        thumbnail = self.create_thumbnail(
+
+            image_path
+
+        )
+
+
+
         if thumbnail is None:
+
 
             return QPixmap()
 
 
 
-        return QPixmap(
+        pixmap = QPixmap(
+
             str(thumbnail)
-        )
-    
-    def create_preview(
-            self,
-            image_path,
-            size=800
-    ):
 
-        image_path = Path(image_path)
-
-
-        cache_path = (
-            self.cache_folder
-            /
-            f"preview_{self.get_cache_path(image_path).name}"
         )
 
 
-        if cache_path.exists():
 
-            return cache_path
-
-
-
-        try:
-
-
-            with Image.open(image_path) as image:
-
-
-                image.thumbnail(
-                    (
-                        size,
-                        size
-                    )
-                )
-
-
-                if image.mode not in (
-                    "RGB",
-                    "RGBA"
-                ):
-
-                    image = image.convert(
-                        "RGBA"
-                    )
-
-
-                image.save(
-                    cache_path,
-                    "PNG",
-                    optimize=True
-                )
-
-
-            return cache_path
+        self.memory_cache[key] = pixmap
 
 
 
-        except Exception as error:
-
-
-            print(
-                f"Preview failed: {error}"
-            )
-
-
-            return None
+        return pixmap

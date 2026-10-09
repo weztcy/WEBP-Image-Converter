@@ -9,6 +9,9 @@ from PySide6.QtCore import Qt
 
 from app.core.thumbnail_cache import ThumbnailCache
 
+from app.core.preview_loader import PreviewLoader
+
+
 
 
 
@@ -20,18 +23,33 @@ class ImagePreview(QLabel):
         super().__init__()
 
 
+
         self.preview_cache = ThumbnailCache(
-            size=800
+
+            size=400
+
         )
 
 
+        self.loader = None
+
+
+
+        self.pixmap_cache = {}
+
+
+
         self.setAlignment(
+
             Qt.AlignCenter
+
         )
 
 
         self.setMinimumHeight(
+
             300
+
         )
 
 
@@ -39,7 +57,12 @@ class ImagePreview(QLabel):
 
 
 
-    def show_image(self, image):
+
+
+    def show_image(
+            self,
+            image
+    ):
 
 
         if image is None:
@@ -50,27 +73,81 @@ class ImagePreview(QLabel):
 
 
 
-        preview_path = (
-            self.preview_cache
-            .create_preview(
-                image.path
-            )
+        key = str(
+
+            image.path
+
         )
 
 
 
-        if preview_path is None:
+        # ==========================
+        # MEMORY CACHE
+        # ==========================
 
-            self.show_empty()
+
+        if key in self.pixmap_cache:
+
+
+            self.setPixmap(
+
+                self.pixmap_cache[key]
+
+            )
 
             return
 
 
 
-        pixmap = QPixmap(
-            str(preview_path)
+
+
+        # ==========================
+        # ASYNC LOAD
+        # ==========================
+
+
+        if self.loader:
+
+
+            self.loader.quit()
+
+
+
+        self.loader = PreviewLoader(
+
+            image,
+
+            self.preview_cache
+
         )
 
+
+        self.loader.preview_ready.connect(
+
+            lambda pixmap:
+
+            self.set_preview(
+
+                key,
+
+                pixmap
+
+            )
+
+        )
+
+
+        self.loader.start()
+
+
+
+
+
+    def set_preview(
+            self,
+            key,
+            pixmap
+    ):
 
 
         if pixmap.isNull():
@@ -81,22 +158,17 @@ class ImagePreview(QLabel):
 
 
 
-        pixmap = pixmap.scaled(
+        self.pixmap_cache[key] = pixmap
 
-            400,
-
-            400,
-
-            Qt.KeepAspectRatio,
-
-            Qt.SmoothTransformation
-
-        )
 
 
         self.setPixmap(
+
             pixmap
+
         )
+
+
 
 
 
@@ -107,5 +179,7 @@ class ImagePreview(QLabel):
 
 
         self.setText(
+
             "Image Preview"
+
         )

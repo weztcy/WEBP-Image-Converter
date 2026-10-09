@@ -1,31 +1,32 @@
-from pathlib import Path
+import os
+import time
 
 
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QPushButton,
     QFileDialog,
     QMessageBox,
     QScrollArea
 )
 
 
+
 from app.widgets.drop_area import DropArea
-from app.widgets.image_list import ImageList
-from app.widgets.image_preview import ImagePreview
-from app.widgets.settings_panel import SettingsPanel
-from app.widgets.output_panel import OutputPanel
-from app.widgets.process_status import ProcessStatus
+
+from app.widgets.convert_toolbar import ConvertToolbar
+
+from app.widgets.image_manager import ImageManager
+
+from app.widgets.conversion_panel import ConversionPanel
+
+from app.widgets.process_panel import ProcessPanel
 
 
-from app.core.image_loader import (
-    load_files,
-    load_folder
-)
+
+from app.core.conversion_thread import ConversionThread
 
 
-from app.core.process_manager import ProcessManager
 
 
 
@@ -37,25 +38,55 @@ class ConvertPage(QWidget):
         super().__init__()
 
 
-        self.images = []
-
-        self.selected_image = None
+        self.worker = None
 
 
-        self.settings_panel = SettingsPanel()
+        self.start_time = None
 
-        self.output_panel = OutputPanel()
 
-        self.process_status = ProcessStatus()
-
-        self.process_manager = ProcessManager()
-
+        self.init_components()
 
         self.init_ui()
 
+        self.connect_signals()
+
+
+
+
+
+    # ==================================================
+    # COMPONENTS
+    # ==================================================
+
+
+    def init_components(self):
+
+
+        self.drop_area = DropArea()
+
+
+        self.toolbar = ConvertToolbar()
+
+
+        self.image_manager = ImageManager()
+
+
+        self.conversion_panel = ConversionPanel()
+
+
+        self.process_panel = ProcessPanel()
+
+
+
+
+
+    # ==================================================
+    # UI
+    # ==================================================
 
 
     def init_ui(self):
+
 
         main_layout = QVBoxLayout()
 
@@ -63,12 +94,15 @@ class ConvertPage(QWidget):
 
         self.scroll_area = QScrollArea()
 
+
         self.scroll_area.setWidgetResizable(
             True
         )
 
 
+
         self.content_widget = QWidget()
+
 
 
         layout = QVBoxLayout(
@@ -77,142 +111,17 @@ class ConvertPage(QWidget):
 
 
 
-        self.drop_area = DropArea()
-
-
-        self.drop_area.files_dropped.connect(
-            self.handle_drop
-        )
-
-
-
-        add_single = QPushButton(
-            "Add Image"
-        )
-
-
-        add_multiple = QPushButton(
-            "Add Multiple Images"
-        )
-
-
-        add_folder = QPushButton(
-            "Add Folder"
-        )
-
-
-        remove_button = QPushButton(
-            "Remove Selected"
-        )
-
-
-        delete_all_button = QPushButton(
-            "Delete All"
-        )
-
-
-        self.convert_selected_button = QPushButton(
-            "Convert Selected"
-        )
-
-
-        self.convert_all_button = QPushButton(
-            "Convert All"
-        )
-
-
-
-        self.image_list = ImageList()
-
-        self.preview = ImagePreview()
-
-
-
-        self.image_list.image_selected.connect(
-            self.handle_image_selected
-        )
-
-
-        self.image_list.image_selected.connect(
-            self.preview.show_image
-        )
-
-
-
-        add_single.clicked.connect(
-            self.add_single_image
-        )
-
-
-        add_multiple.clicked.connect(
-            self.add_multiple_images
-        )
-
-
-        add_folder.clicked.connect(
-            self.add_folder
-        )
-
-
-        remove_button.clicked.connect(
-            self.remove_selected
-        )
-
-
-        delete_all_button.clicked.connect(
-            self.delete_all
-        )
-
-
-        self.convert_selected_button.clicked.connect(
-            self.convert_selected
-        )
-
-
-        self.convert_all_button.clicked.connect(
-            self.convert_all
-        )
-
-
-
-        self.process_status.open_folder_clicked.connect(
-            self.open_output_folder
-        )
-
-
-        self.process_status.cancel_clicked.connect(
-            self.cancel_processing
-        )
-
-
-
         widgets = [
 
             self.drop_area,
 
-            add_single,
+            self.toolbar,
 
-            add_multiple,
+            self.image_manager,
 
-            add_folder,
+            self.conversion_panel,
 
-            self.image_list,
-
-            remove_button,
-
-            delete_all_button,
-
-            self.preview,
-
-            self.settings_panel,
-
-            self.output_panel,
-
-            self.process_status,
-
-            self.convert_selected_button,
-
-            self.convert_all_button
+            self.process_panel
 
         ]
 
@@ -240,23 +149,80 @@ class ConvertPage(QWidget):
             main_layout
         )
 
-    # =========================
-    # IMAGE SELECTION
-    # =========================
-
-
-    def handle_image_selected(self, image):
-
-        self.selected_image = image
 
 
 
-    # =========================
+
+    # ==================================================
+    # SIGNAL CONNECTION
+    # ==================================================
+
+
+    def connect_signals(self):
+
+
+        self.drop_area.files_dropped.connect(
+            self.image_manager.add_paths
+        )
+
+
+
+        self.toolbar.add_image_clicked.connect(
+            self.add_single_image
+        )
+
+
+        self.toolbar.add_multiple_clicked.connect(
+            self.add_multiple_images
+        )
+
+
+        self.toolbar.add_folder_clicked.connect(
+            self.add_folder
+        )
+
+
+        self.toolbar.remove_selected_clicked.connect(
+            self.image_manager.remove_selected
+        )
+
+
+        self.toolbar.delete_all_clicked.connect(
+            self.delete_all
+        )
+
+
+        self.toolbar.convert_selected_clicked.connect(
+            self.convert_selected
+        )
+
+
+        self.toolbar.convert_all_clicked.connect(
+            self.convert_all
+        )
+
+
+
+        self.process_panel.open_folder_clicked.connect(
+            self.open_output_folder
+        )
+
+
+        self.process_panel.cancel_clicked.connect(
+            self.cancel_processing
+        )
+
+
+
+
+
+    # ==================================================
     # IMAGE INPUT
-    # =========================
+    # ==================================================
 
 
     def add_single_image(self):
+
 
         file, _ = QFileDialog.getOpenFileName(
 
@@ -266,20 +232,23 @@ class ConvertPage(QWidget):
 
             "",
 
-            "Images (*.jpg *.jpeg *.png)"
+            "Images (*.jpg *.jpeg *.png *.webp)"
 
         )
 
 
         if file:
 
-            self.add_images(
+            self.image_manager.add_images(
                 [file]
             )
 
 
 
+
+
     def add_multiple_images(self):
+
 
         files, _ = QFileDialog.getOpenFileNames(
 
@@ -289,20 +258,23 @@ class ConvertPage(QWidget):
 
             "",
 
-            "Images (*.jpg *.jpeg *.png)"
+            "Images (*.jpg *.jpeg *.png *.webp)"
 
         )
 
 
         if files:
 
-            self.add_images(
+            self.image_manager.add_images(
                 files
             )
 
 
 
+
+
     def add_folder(self):
+
 
         folder = QFileDialog.getExistingDirectory(
 
@@ -315,136 +287,42 @@ class ConvertPage(QWidget):
 
         if folder:
 
-            self.images.extend(
-
-                load_folder(folder)
-
+            self.image_manager.add_folder(
+                folder
             )
 
 
-            self.refresh()
-
-
-
-    def handle_drop(self, paths):
-
-        for path in paths:
-
-            self.add_path(path)
-
-
-
-    def add_path(self, path):
-
-        if Path(path).is_dir():
-
-            self.images.extend(
-
-                load_folder(path)
-
-            )
-
-
-        else:
-
-            self.images.extend(
-
-                load_files(
-                    [path]
-                )
-
-            )
-
-
-        self.refresh()
-
-
-
-    def add_images(self, files):
-
-        self.images.extend(
-
-            load_files(files)
-
-        )
-
-
-        self.refresh()
-
-
-
-    def refresh(self):
-
-        self.image_list.clear()
-
-
-        self.image_list.add_images(
-
-            self.images
-
-        )
-
-
-
-    # =========================
-    # IMAGE MANAGEMENT
-    # =========================
-
-
-    def remove_selected(self):
-
-        if self.selected_image is None:
-
-            return
-
-
-
-        if self.selected_image in self.images:
-
-            self.images.remove(
-
-                self.selected_image
-
-            )
-
-
-
-        self.selected_image = None
-
-
-        self.preview.show_empty()
-
-
-        self.refresh()
 
 
 
     def delete_all(self):
 
-        self.images.clear()
+
+        self.image_manager.clear()
 
 
-        self.selected_image = None
+        self.process_panel.reset()
 
 
-        self.image_list.clear()
-
-
-        self.preview.show_empty()
-
-
-        self.process_status.reset()
+        self.conversion_panel.reset()
 
 
 
-    # =========================
-    # CONVERSION
-    # =========================
+
+
+    # ==================================================
+    # CONVERSION REQUEST
+    # ==================================================
 
 
     def convert_selected(self):
 
-        if self.selected_image is None:
+
+        image = self.image_manager.get_selected()
+
+
+
+        if image is None:
 
 
             QMessageBox.warning(
@@ -462,19 +340,24 @@ class ConvertPage(QWidget):
 
 
 
-        self.convert_process(
+        self.start_conversion(
 
-            [
-                self.selected_image
-            ]
+            [image]
 
         )
 
 
 
+
+
     def convert_all(self):
 
-        if not self.images:
+
+        images = self.image_manager.get_images()
+
+
+
+        if not images:
 
 
             QMessageBox.warning(
@@ -492,136 +375,205 @@ class ConvertPage(QWidget):
 
 
 
-        self.convert_process(
+        self.start_conversion(
 
-            self.images
+            images
 
         )
 
 
 
-    def convert_process(self, images):
-
-        try:
-
-            self.set_processing_state()
 
 
-            self.process_status.reset()
+    # ==================================================
+    # START CONVERSION
+    # ==================================================
 
 
-            self.process_status.set_processing()
+    def start_conversion(
+            self,
+            images
+    ):
 
 
-
-            settings = self.settings_panel.get_settings()
-
+        if self.worker:
 
 
-            output_folder = (
-                self.output_panel.get_output_folder()
-            )
-
-
-
-            result = self.process_manager.process(
-
-                images,
-
-                settings,
-
-                output_folder,
-
-                on_file=self.update_processing_file,
-
-                on_progress=self.update_processing_progress
-
-            )
-
-
-
-            self.set_finished_state()
-
-
-
-            if result["cancelled"]:
-
-
-                self.process_status.set_cancelled()
-
-
-
-                QMessageBox.information(
-
-                    self,
-
-                    "Conversion Cancelled",
-
-                    f"Process cancelled.\n\n"
-                    f"Success: {result['success']}\n"
-                    f"Failed: {result['failed']}"
-
-                )
-
-
-            else:
-
-
-                self.process_status.set_completed()
-
-
-
-                QMessageBox.information(
-
-                    self,
-
-                    "Conversion Complete",
-
-                    f"Success: {result['success']}\n"
-                    f"Failed: {result['failed']}"
-
-                )
-
-
-
-        except Exception as error:
-
-
-            self.set_finished_state()
-
-
-            self.process_status.set_idle()
-
-
-
-            QMessageBox.critical(
+            QMessageBox.warning(
 
                 self,
 
-                "Conversion Failed",
+                "Processing",
 
-                str(error)
+                "Conversion is already running."
 
             )
 
 
-
-    # =========================
-    # PROCESS STATUS
-    # =========================
+            return
 
 
-    def update_processing_file(self, filename):
 
-        self.process_status.update_file(
 
-            filename
+
+        self.toolbar.set_processing(
+            True
+        )
+
+
+        self.process_panel.reset()
+
+
+        self.process_panel.set_processing()
+
+
+
+        # TIMER START
+
+        self.start_time = time.perf_counter()
+
+
+
+        settings = (
+
+            self.conversion_panel.get_settings()
+
+        )
+
+
+        output_folder = (
+
+            self.conversion_panel.get_output_folder()
 
         )
 
 
 
-    def update_processing_progress(
+        print(
+            "Conversion Settings:",
+            settings
+        )
+
+
+        print(
+            "Output:",
+            output_folder
+        )
+
+
+
+        # PERFORMANCE INFO
+
+
+        self.conversion_panel.set_profile(
+
+            settings["profile"]
+
+        )
+
+
+        self.conversion_panel.set_workers(
+
+            self.get_worker_count()
+
+        )
+
+
+
+        self.worker = ConversionThread(
+
+            images,
+
+            settings,
+
+            output_folder
+
+        )
+
+
+
+        self.worker.file_processed.connect(
+
+            self.process_panel.update_file
+
+        )
+
+
+        self.worker.progress_changed.connect(
+
+            self.update_progress
+
+        )
+
+
+        self.worker.conversion_finished.connect(
+
+            self.conversion_finished
+
+        )
+
+
+        self.worker.conversion_failed.connect(
+
+            self.conversion_failed
+
+        )
+
+
+        self.worker.finished.connect(
+
+            self.cleanup_worker
+
+        )
+
+
+
+        self.worker.start()
+
+
+
+
+
+    # ==================================================
+    # PERFORMANCE
+    # ==================================================
+
+
+    def get_worker_count(self):
+
+
+        try:
+
+
+            from app.core.performance_config import (
+
+                PerformanceConfig
+
+            )
+
+
+            config = PerformanceConfig()
+
+
+            return config.calculate_workers()
+
+
+
+        except Exception:
+
+
+            return 0
+
+
+
+
+
+    # ==================================================
+    # THREAD UPDATE
+    # ==================================================
+
+
+    def update_progress(
             self,
             progress,
             success,
@@ -629,14 +581,14 @@ class ConvertPage(QWidget):
     ):
 
 
-        self.process_status.update_progress(
+        self.process_panel.update_progress(
 
             progress
 
         )
 
 
-        self.process_status.update_result(
+        self.process_panel.update_result(
 
             success,
 
@@ -646,60 +598,230 @@ class ConvertPage(QWidget):
 
 
 
-    def set_processing_state(self):
 
-        self.convert_selected_button.setEnabled(
+
+    # ==================================================
+    # FINISHED
+    # ==================================================
+
+
+    def conversion_finished(
+            self,
+            result
+    ):
+
+
+        self.toolbar.set_processing(
 
             False
 
         )
 
 
-        self.convert_all_button.setEnabled(
+        duration = 0
+
+
+
+        if self.start_time:
+
+
+            duration = (
+
+                time.perf_counter()
+
+                -
+
+                self.start_time
+
+            )
+
+
+
+        total = (
+
+            result["success"]
+
+            +
+
+            result["failed"]
+
+        )
+
+
+
+        speed = 0
+
+
+
+        if duration > 0:
+
+
+            speed = total / duration
+
+
+
+        self.conversion_panel.update_statistics({
+
+            "total": total,
+
+            "success": result["success"],
+
+            "failed": result["failed"],
+
+            "duration": duration,
+
+            "speed": speed,
+
+            "input_mb": result["input_bytes"] / (1024 * 1024),
+
+            "output_mb": result["output_bytes"] / (1024 * 1024),
+
+            "saved_percent": result["saved_percent"]
+
+        })
+
+
+
+
+
+        if result.get(
+            "cancelled",
+            False
+        ):
+
+
+            self.process_panel.set_cancelled()
+
+
+
+            QMessageBox.information(
+
+                self,
+
+                "Cancelled",
+
+                "Conversion cancelled."
+
+            )
+
+
+
+        else:
+
+
+            self.process_panel.set_completed()
+
+
+
+            QMessageBox.information(
+
+                self,
+
+                "Conversion Complete",
+
+                f"Success: {result['success']}\n"
+                f"Failed: {result['failed']}\n"
+                f"Time: {duration:.2f}s"
+
+            )
+
+
+
+
+
+    def conversion_failed(
+            self,
+            error
+    ):
+
+
+        self.toolbar.set_processing(
 
             False
 
         )
 
 
-
-    def set_finished_state(self):
-
-        self.convert_selected_button.setEnabled(
-
-            True
-
-        )
+        self.process_panel.set_idle()
 
 
-        self.convert_all_button.setEnabled(
 
-            True
+        QMessageBox.critical(
+
+            self,
+
+            "Conversion Failed",
+
+            error
 
         )
 
+
+
+
+
+    # ==================================================
+    # CLEANUP
+    # ==================================================
+
+
+    def cleanup_worker(self):
+
+
+        worker = self.worker
+
+
+        self.worker = None
+
+
+
+        if worker:
+
+
+            worker.deleteLater()
+
+
+
+
+
+    # ==================================================
+    # CANCEL
+    # ==================================================
 
 
     def cancel_processing(self):
 
-        self.process_manager.cancel()
+
+        if self.worker:
+
+
+            self.worker.cancel()
 
 
 
-    # =========================
-    # OUTPUT FOLDER
-    # =========================
+            self.process_panel.set_cancelled()
+
+
+
+
+
+    # ==================================================
+    # OUTPUT
+    # ==================================================
 
 
     def open_output_folder(self):
 
-        import os
 
+        folder = (
 
-        folder = self.output_panel.get_output_folder()
+            self.conversion_panel.get_output_folder()
+
+        )
 
 
 
         if os.path.exists(folder):
+
 
             os.startfile(folder)
