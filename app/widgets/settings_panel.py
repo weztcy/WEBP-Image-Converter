@@ -103,6 +103,7 @@ class SettingsPanel(QWidget):
         quality_group = QGroupBox(
             "Quality"
         )
+        self.quality_group = quality_group
 
 
         quality_layout = QVBoxLayout()
@@ -130,9 +131,7 @@ class SettingsPanel(QWidget):
         )
 
 
-        self.quality_slider.setEnabled(
-            True
-        )
+        self.quality_slider.setEnabled(True)
 
 
 
@@ -292,19 +291,10 @@ class SettingsPanel(QWidget):
 
     def update_state(self):
 
+        is_lossy = self.lossy_radio.isChecked()
 
-        is_lossy = (
-
-            self.lossy_radio.isChecked()
-
-        )
-
-
-
-        self.quality_slider.setEnabled(
-            is_lossy
-        )
-
+        self.quality_group.setVisible(is_lossy)
+        self.quality_slider.setEnabled(is_lossy)
 
         self.emit_settings()
 

@@ -12,15 +12,15 @@ from PySide6.QtWidgets import (
 
 
 
-from app.widgets.drop_area import DropArea
+from app.components.drop_section import DropSection
 
-from app.widgets.convert_toolbar import ConvertToolbar
+from app.components.action_section import ActionSection
 
-from app.widgets.image_manager import ImageManager
+from app.components.image_section import ImageSection
 
-from app.widgets.conversion_panel import ConversionPanel
+from app.components.conversion_section import ConversionSection
 
-from app.widgets.process_panel import ProcessPanel
+from app.components.process_section import ProcessSection
 
 
 
@@ -62,19 +62,19 @@ class ConvertPage(QWidget):
     def init_components(self):
 
 
-        self.drop_area = DropArea()
+        self.drop_section = DropSection()
 
 
-        self.toolbar = ConvertToolbar()
+        self.action_section = ActionSection()
 
 
-        self.image_manager = ImageManager()
+        self.image_section = ImageSection()
 
 
-        self.conversion_panel = ConversionPanel()
+        self.conversion_section = ConversionSection()
 
 
-        self.process_panel = ProcessPanel()
+        self.process_section = ProcessSection()
 
 
 
@@ -112,17 +112,11 @@ class ConvertPage(QWidget):
 
 
         widgets = [
-
-            self.drop_area,
-
-            self.toolbar,
-
-            self.image_manager,
-
-            self.conversion_panel,
-
-            self.process_panel
-
+            self.drop_section,
+            self.image_section,
+            self.conversion_section,
+            self.action_section,
+            self.process_section
         ]
 
 
@@ -161,54 +155,56 @@ class ConvertPage(QWidget):
     def connect_signals(self):
 
 
-        self.drop_area.files_dropped.connect(
-            self.image_manager.add_paths
+        self.drop_section.drop_area.files_dropped.connect(
+            self.image_section.add_paths
         )
 
 
-
-        self.toolbar.add_image_clicked.connect(
+        self.drop_section.add_image_button.clicked.connect(
             self.add_single_image
         )
 
 
-        self.toolbar.add_multiple_clicked.connect(
+        self.drop_section.add_multiple_button.clicked.connect(
             self.add_multiple_images
         )
 
 
-        self.toolbar.add_folder_clicked.connect(
+        self.drop_section.add_folder_button.clicked.connect(
             self.add_folder
         )
+        
 
 
-        self.toolbar.remove_selected_clicked.connect(
-            self.image_manager.remove_selected
-        )
+        
 
 
-        self.toolbar.delete_all_clicked.connect(
-            self.delete_all
-        )
+        
 
 
-        self.toolbar.convert_selected_clicked.connect(
+        
+
+
+        
+
+
+        self.action_section.convert_selected_clicked.connect(
             self.convert_selected
         )
 
 
-        self.toolbar.convert_all_clicked.connect(
+        self.action_section.convert_all_clicked.connect(
             self.convert_all
         )
 
 
 
-        self.process_panel.open_folder_clicked.connect(
+        self.process_section.open_folder_clicked.connect(
             self.open_output_folder
         )
 
 
-        self.process_panel.cancel_clicked.connect(
+        self.action_section.cancel_clicked.connect(
             self.cancel_processing
         )
 
@@ -239,7 +235,7 @@ class ConvertPage(QWidget):
 
         if file:
 
-            self.image_manager.add_images(
+            self.image_section.add_images(
                 [file]
             )
 
@@ -265,7 +261,7 @@ class ConvertPage(QWidget):
 
         if files:
 
-            self.image_manager.add_images(
+            self.image_section.add_images(
                 files
             )
 
@@ -287,7 +283,7 @@ class ConvertPage(QWidget):
 
         if folder:
 
-            self.image_manager.add_folder(
+            self.image_section.add_folder(
                 folder
             )
 
@@ -298,13 +294,13 @@ class ConvertPage(QWidget):
     def delete_all(self):
 
 
-        self.image_manager.clear()
+        self.image_section.clear()
 
 
-        self.process_panel.reset()
+        self.process_section.reset()
 
 
-        self.conversion_panel.reset()
+        self.conversion_section.reset()
 
 
 
@@ -318,7 +314,7 @@ class ConvertPage(QWidget):
     def convert_selected(self):
 
 
-        image = self.image_manager.get_selected()
+        image = self.image_section.get_selected()
 
 
 
@@ -353,7 +349,7 @@ class ConvertPage(QWidget):
     def convert_all(self):
 
 
-        images = self.image_manager.get_images()
+        images = self.image_section.get_images()
 
 
 
@@ -416,15 +412,13 @@ class ConvertPage(QWidget):
 
 
 
-        self.toolbar.set_processing(
-            True
-        )
+        self.action_section.set_processing(True)
 
 
-        self.process_panel.reset()
+        self.process_section.reset()
 
 
-        self.process_panel.set_processing()
+        self.process_section.set_processing()
 
 
 
@@ -436,14 +430,14 @@ class ConvertPage(QWidget):
 
         settings = (
 
-            self.conversion_panel.get_settings()
+            self.conversion_section.get_settings()
 
         )
 
 
         output_folder = (
 
-            self.conversion_panel.get_output_folder()
+            self.conversion_section.get_output_folder()
 
         )
 
@@ -465,14 +459,14 @@ class ConvertPage(QWidget):
         # PERFORMANCE INFO
 
 
-        self.conversion_panel.set_profile(
+        self.process_section.set_profile(
 
             settings["profile"]
 
         )
 
 
-        self.conversion_panel.set_workers(
+        self.process_section.set_workers(
 
             self.get_worker_count()
 
@@ -494,7 +488,7 @@ class ConvertPage(QWidget):
 
         self.worker.file_processed.connect(
 
-            self.process_panel.update_file
+            self.process_section.update_file
 
         )
 
@@ -581,14 +575,14 @@ class ConvertPage(QWidget):
     ):
 
 
-        self.process_panel.update_progress(
+        self.process_section.update_progress(
 
             progress
 
         )
 
 
-        self.process_panel.update_result(
+        self.process_section.update_result(
 
             success,
 
@@ -611,12 +605,7 @@ class ConvertPage(QWidget):
     ):
 
 
-        self.toolbar.set_processing(
-
-            False
-
-        )
-
+        self.action_section.set_processing(False)
 
         duration = 0
 
@@ -660,7 +649,7 @@ class ConvertPage(QWidget):
 
 
 
-        self.conversion_panel.update_statistics({
+        self.process_section.update_statistics({
 
             "total": total,
 
@@ -690,7 +679,7 @@ class ConvertPage(QWidget):
         ):
 
 
-            self.process_panel.set_cancelled()
+            self.process_section.set_cancelled()
 
 
 
@@ -709,7 +698,7 @@ class ConvertPage(QWidget):
         else:
 
 
-            self.process_panel.set_completed()
+            self.process_section.set_completed()
 
 
 
@@ -735,14 +724,14 @@ class ConvertPage(QWidget):
     ):
 
 
-        self.toolbar.set_processing(
+        self.action_section.set_processing(
 
             False
 
         )
 
 
-        self.process_panel.set_idle()
+        self.process_section.set_idle()
 
 
 
@@ -799,7 +788,7 @@ class ConvertPage(QWidget):
 
 
 
-            self.process_panel.set_cancelled()
+            self.process_section.set_cancelled()
 
 
 
@@ -815,7 +804,7 @@ class ConvertPage(QWidget):
 
         folder = (
 
-            self.conversion_panel.get_output_folder()
+            self.conversion_section.get_output_folder()
 
         )
 
