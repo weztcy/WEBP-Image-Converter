@@ -5,7 +5,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QVBoxLayout,
-    QFrame
+    QFrame,
+    QSizePolicy
 )
 
 from PySide6.QtGui import (
@@ -41,7 +42,7 @@ class ImageList(QListWidget):
 
         super().__init__()
 
-
+        self.columns = 4
 
         self.current_selected_item = None
 
@@ -65,8 +66,33 @@ class ImageList(QListWidget):
             self.handle_click
         )
 
+    def resizeEvent(
+            self,
+            event
+    ):
 
 
+        item_size = self.calculate_item_size()
+
+
+        self.setGridSize(
+            QSize(
+                item_size.width()+12,
+                item_size.height()+12
+            )
+        )
+
+
+        for i in range(self.count()):
+
+            item = self.item(i)
+
+            item.setSizeHint(
+                item_size
+            )
+
+
+        super().resizeEvent(event)
 
 
     # ==================================
@@ -99,7 +125,12 @@ class ImageList(QListWidget):
         self.setSpacing(
             12
         )
-
+        self.setViewportMargins(
+            0,
+            0,
+            0,
+            0
+        )
 
         self.setIconSize(
             QSize(
@@ -110,7 +141,12 @@ class ImageList(QListWidget):
 
 
         self.setUniformItemSizes(
-            True
+            False
+        )
+
+
+        self.setMovement(
+            QListWidget.Static
         )
 
 
@@ -167,7 +203,38 @@ class ImageList(QListWidget):
 
 
 
+    def calculate_item_size(self):
 
+
+        viewport_width = self.viewport().width()
+
+
+        spacing = self.spacing()
+
+
+        # total jarak antar card
+        total_spacing = (
+            spacing * (self.columns + 1)
+        )
+
+
+        card_width = (
+            viewport_width - total_spacing
+        ) // self.columns
+
+
+
+        # batas minimum supaya tidak rusak
+        card_width = max(
+            180,
+            card_width
+        )
+
+
+        return QSize(
+            card_width,
+            115
+        )
 
     # ==================================
     # ADD IMAGE
@@ -205,10 +272,7 @@ class ImageList(QListWidget):
 
 
             item.setSizeHint(
-                QSize(
-                    276,
-                    115
-                )
+                self.calculate_item_size()
             )
 
 
@@ -505,6 +569,13 @@ class ImageCard(QFrame):
         super().__init__()
 
 
+
+        self.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed
+        )
+
+
         self.init_ui()
 
 
@@ -583,12 +654,20 @@ class ImageCard(QFrame):
             12
         )
 
+        layout.setStretch(0,0)
+        layout.setStretch(1,1)
+
 
 
         self.thumbnail = QLabel()
 
+        self.thumbnail.setMinimumSize(
+            70,
+            70
+        )
 
-        self.thumbnail.setFixedSize(
+
+        self.thumbnail.setMaximumSize(
             80,
             80
         )
@@ -625,6 +704,16 @@ class ImageCard(QFrame):
 
 
         self.name = QLabel()
+
+        self.name.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed
+        )
+
+
+        self.name.setWordWrap(
+            False
+        )
 
         self.name.setObjectName(
             "name"
@@ -706,11 +795,12 @@ class ImageCard(QFrame):
     ):
 
 
+        size = self.thumbnail.size()
+
+
         scaled = pixmap.scaled(
 
-            80,
-
-            80,
+            size,
 
             Qt.KeepAspectRatio,
 

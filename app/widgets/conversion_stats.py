@@ -743,7 +743,7 @@ class ConversionStats(QWidget):
 
 
         self.speed.value_label.setText(
-            f"{data['speed']:.2f} img/s"
+            f"{data['speed']:.2f} image/s"
         )
 
 

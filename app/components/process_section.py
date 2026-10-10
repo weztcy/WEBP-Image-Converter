@@ -274,7 +274,7 @@ class ProcessSection(QWidget):
             performance_card
         )
         
-        performance_card.setFixedHeight(480)
+        performance_card.setFixedHeight(500)
 
 
         performance_layout.setContentsMargins(
@@ -304,7 +304,7 @@ class ProcessSection(QWidget):
             stats_card
         )
         
-        stats_card.setFixedHeight(480)
+        stats_card.setFixedHeight(500)
 
 
         stats_layout.setContentsMargins(
