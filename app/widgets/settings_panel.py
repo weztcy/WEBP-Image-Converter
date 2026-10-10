@@ -516,7 +516,7 @@ class SettingsPanel(QWidget):
         )
 
 
-        self.fast_radio.setChecked(
+        self.standard_radio.setChecked(
             True
         )
 

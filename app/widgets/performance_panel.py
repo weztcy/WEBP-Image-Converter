@@ -430,7 +430,7 @@ class PerformancePanel(QWidget):
 
 
         self.profile_value = QLabel(
-            "⚡ Fast"
+            "⭐ Standard"
         )
 
 
@@ -441,7 +441,7 @@ class PerformancePanel(QWidget):
 
 
         self.profile_desc = QLabel(
-            "Fast conversion priority"
+            "Balanced speed & size"
         )
 
 
