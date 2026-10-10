@@ -304,6 +304,7 @@ class PerformancePanel(QWidget):
 
 
         frame = QFrame()
+        frame.setFixedWidth(520)
 
 
 
@@ -430,7 +431,7 @@ class PerformancePanel(QWidget):
 
 
         self.profile_value = QLabel(
-            "⭐ Standard"
+            "-"
         )
 
 
@@ -441,7 +442,7 @@ class PerformancePanel(QWidget):
 
 
         self.profile_desc = QLabel(
-            "Balanced speed & size"
+            "Waiting configuration..."
         )
 
 

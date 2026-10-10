@@ -273,6 +273,8 @@ class ProcessSection(QWidget):
         performance_layout = QVBoxLayout(
             performance_card
         )
+        
+        performance_card.setFixedHeight(480)
 
 
         performance_layout.setContentsMargins(
@@ -301,6 +303,8 @@ class ProcessSection(QWidget):
         stats_layout = QVBoxLayout(
             stats_card
         )
+        
+        stats_card.setFixedHeight(480)
 
 
         stats_layout.setContentsMargins(
