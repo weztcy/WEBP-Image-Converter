@@ -215,7 +215,7 @@ class HomePage(QWidget):
         brand_wrap = QHBoxLayout()
         brand_wrap.setSpacing(12)
 
-        logo_mark = QLabel("W")
+        logo_mark = QLabel("✨")
         logo_mark.setObjectName("logoMark")
         logo_mark.setFixedSize(72, 72)
         logo_mark.setAlignment(Qt.AlignCenter)
@@ -227,7 +227,7 @@ class HomePage(QWidget):
         eyebrow.setObjectName("eyebrow")
         eyebrow.setAlignment(Qt.AlignCenter)
 
-        brand_title = QLabel("Image2WEBP Studio")
+        brand_title = QLabel("v1.2")
         brand_title.setObjectName("brandTitle")
 
         brand_subtitle = QLabel("Fast conversion • Clean interface • Professional workflow")
@@ -245,10 +245,9 @@ class HomePage(QWidget):
         # right pills
         pill_wrap = QHBoxLayout()
         pill_wrap.setSpacing(10)
-        pill_wrap.addWidget(self._create_pill("JPG"))
-        pill_wrap.addWidget(self._create_pill("PNG"))
-        pill_wrap.addWidget(self._create_pill("WEBP"))
-        pill_wrap.addWidget(self._create_pill("FAST"))
+        pill_wrap.addWidget(self._create_pill("🔒 Private & Secure"))
+        pill_wrap.addWidget(self._create_pill("🖥️ No Upload, Just Local Processing"))
+        pill_wrap.addWidget(self._create_pill("⚡ Super Fast & Easy"))
         top_bar.addLayout(pill_wrap)
 
         main_layout.addLayout(top_bar)
@@ -274,7 +273,7 @@ class HomePage(QWidget):
         hero_title.setObjectName("heroTitle")
 
         hero_desc = QLabel(
-            "Optimized for desktop workflow, Image2WEBP Studio helps you "
+            "Optimized for desktop workflow, WEBP Converter Pro helps you "
             "convert JPG, JPEG, and PNG assets into efficient WEBP output "
             "through a polished interface built for speed and clarity."
         )

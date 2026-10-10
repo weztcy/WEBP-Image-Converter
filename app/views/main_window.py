@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
     def init_window(self):
 
         self.setWindowTitle(
-            "Image2WEBP Studio"
+            "WEBP Converter Pro"
         )
 
         self.setMinimumSize(
@@ -189,7 +189,7 @@ class MainWindow(QMainWindow):
         brand_container = QHBoxLayout()
 
         brand_icon = QLabel(
-            "W"
+            "✨"
         )
 
         brand_icon.setAlignment(
@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
         brand_text = QVBoxLayout()
 
         brand = QLabel(
-            "Image2WEBP Studio"
+            "WEBP Converter Pro"
         )
 
         brand.setObjectName(
@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
 
 
         footer_text = QLabel(
-            "Image2WEBP Studio • Premium Desktop Utility"
+            "WEBP Converter Pro • Premium Desktop Utility"
         )
 
         footer_text.setStyleSheet(

@@ -5691,7 +5691,7 @@ class HomePage(QWidget):
         brand_wrap = QHBoxLayout()
         brand_wrap.setSpacing(12)
 
-        logo_mark = QLabel("W")
+        logo_mark = QLabel("✨")
         logo_mark.setObjectName("logoMark")
         logo_mark.setFixedSize(72, 72)
         logo_mark.setAlignment(Qt.AlignCenter)
@@ -5703,7 +5703,7 @@ class HomePage(QWidget):
         eyebrow.setObjectName("eyebrow")
         eyebrow.setAlignment(Qt.AlignCenter)
 
-        brand_title = QLabel("Image2WEBP Studio")
+        brand_title = QLabel("WEBP Converter Pro")
         brand_title.setObjectName("brandTitle")
 
         brand_subtitle = QLabel("Fast conversion • Clean interface • Professional workflow")
@@ -5750,7 +5750,7 @@ class HomePage(QWidget):
         hero_title.setObjectName("heroTitle")
 
         hero_desc = QLabel(
-            "Optimized for desktop workflow, Image2WEBP Studio helps you "
+            "Optimized for desktop workflow, WEBP Converter Pro helps you "
             "convert JPG, JPEG, and PNG assets into efficient WEBP output "
             "through a polished interface built for speed and clarity."
         )
@@ -6056,7 +6056,7 @@ class MainWindow(QMainWindow):
     def init_window(self):
 
         self.setWindowTitle(
-            "Image2WEBP Studio"
+            "WEBP Converter Pro"
         )
 
         self.setMinimumSize(
@@ -6211,7 +6211,7 @@ class MainWindow(QMainWindow):
         brand_container = QHBoxLayout()
 
         brand_icon = QLabel(
-            "W"
+            "✨"
         )
 
         brand_icon.setAlignment(
@@ -6247,7 +6247,7 @@ class MainWindow(QMainWindow):
         brand_text = QVBoxLayout()
 
         brand = QLabel(
-            "Image2WEBP Studio"
+            "WEBP Converter Pro"
         )
 
         brand.setObjectName(
@@ -6396,7 +6396,7 @@ class MainWindow(QMainWindow):
 
 
         footer_text = QLabel(
-            "Image2WEBP Studio • Premium Desktop Utility"
+            "WEBP Converter Pro • Premium Desktop Utility"
         )
 
         footer_text.setStyleSheet(
