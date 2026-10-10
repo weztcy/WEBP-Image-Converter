@@ -9,6 +9,7 @@ qt-material
 
 # Performance Monitoring
 psutil
+pyqtgraph
 
 # Application Packaging
 pyinstaller
