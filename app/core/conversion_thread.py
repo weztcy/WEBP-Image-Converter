@@ -32,6 +32,14 @@ class ConversionThread(QThread):
     )
 
 
+    # worker monitor
+    # active worker, maximum worker
+    worker_changed = Signal(
+        int,
+        int,
+    )
+
+
     conversion_finished = Signal(
         dict
     )
@@ -78,14 +86,11 @@ class ConversionThread(QThread):
     # THREAD EXECUTION
     # ==========================
 
-
     def run(self):
 
 
         try:
 
-
-            # create inside worker thread
 
             self.process_manager = ProcessPoolManager()
 
@@ -101,7 +106,9 @@ class ConversionThread(QThread):
 
                 on_file=self.handle_file,
 
-                on_progress=self.handle_progress
+                on_progress=self.handle_progress,
+
+                on_worker_update=self.handle_worker_update
 
             )
 
@@ -144,9 +151,8 @@ class ConversionThread(QThread):
 
 
     # ==========================
-    # CALLBACK
+    # CALLBACK FILE
     # ==========================
-
 
     def handle_file(
             self,
@@ -169,6 +175,10 @@ class ConversionThread(QThread):
 
 
 
+
+    # ==========================
+    # CALLBACK PROGRESS
+    # ==========================
 
     def handle_progress(
             self,
@@ -199,9 +209,37 @@ class ConversionThread(QThread):
 
 
     # ==========================
-    # CANCEL
+    # CALLBACK WORKER
     # ==========================
 
+    def handle_worker_update(
+            self,
+            active,
+            maximum
+    ):
+
+
+        if self.cancelled:
+
+            return
+
+
+
+        self.worker_changed.emit(
+
+            active,
+
+            maximum
+
+        )
+
+
+
+
+
+    # ==========================
+    # CANCEL
+    # ==========================
 
     def cancel(self):
 
@@ -218,6 +256,10 @@ class ConversionThread(QThread):
 
 
 
+
+    # ==========================
+    # STATUS
+    # ==========================
 
     def is_cancelled(self):
 

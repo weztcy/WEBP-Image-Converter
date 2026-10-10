@@ -38,20 +38,11 @@ class ProcessPoolManager:
             workers=None
     ):
 
-
-        # ==================================
-        # HARDWARE DETECTION
-        # ==================================
-
-
         if workers is None:
-
 
             config = PerformanceConfig()
 
-
             workers = config.calculate_workers()
-
 
 
             print(
@@ -66,14 +57,16 @@ class ProcessPoolManager:
 
         else:
 
-
             print(
                 "Manual worker override"
             )
 
 
-
         self.workers = workers
+
+
+        # worker yang sedang dipakai job sekarang
+        self.active_workers = 0
 
 
         self.cancelled = False
@@ -86,18 +79,11 @@ class ProcessPoolManager:
 
 
 
-        print(
-            f"Workers active: {self.workers}"
-        )
-
-
-
 
 
     # ==================================
     # CANCEL
     # ==================================
-
 
     def cancel(self):
 
@@ -108,7 +94,6 @@ class ProcessPoolManager:
 
         for future in self.futures:
 
-
             future.cancel()
 
 
@@ -118,7 +103,6 @@ class ProcessPoolManager:
     # ==================================
     # FILE SIZE
     # ==================================
-
 
     def get_file_size(
             self,
@@ -145,9 +129,31 @@ class ProcessPoolManager:
 
 
     # ==================================
-    # CREATE TASK
+    # ACTIVE WORKER COUNT
     # ==================================
 
+    def update_worker_status(
+            self,
+            callback
+    ):
+
+        if callback:
+
+            callback(
+
+                self.active_workers,
+
+                self.workers
+
+            )
+
+
+
+
+
+    # ==================================
+    # CREATE TASK
+    # ==================================
 
     def create_task(
             self,
@@ -196,13 +202,9 @@ class ProcessPoolManager:
         )
 
 
-
-
-
     # ==================================
     # PROCESS
     # ==================================
-
 
     def process(
             self,
@@ -210,7 +212,8 @@ class ProcessPoolManager:
             settings,
             output_folder,
             on_file=None,
-            on_progress=None
+            on_progress=None,
+            on_worker_update=None
     ):
 
 
@@ -230,19 +233,27 @@ class ProcessPoolManager:
 
             return {
 
-                "success": 0,
 
-                "failed": 0,
+                "success":0,
 
-                "cancelled": False,
 
-                "input_bytes": 0,
+                "failed":0,
 
-                "output_bytes": 0,
 
-                "saved_percent": 0
+                "cancelled":False,
+
+
+                "input_bytes":0,
+
+
+                "output_bytes":0,
+
+
+                "saved_percent":0
+
 
             }
+
 
 
 
@@ -253,7 +264,6 @@ class ProcessPoolManager:
         failed = 0
 
 
-
         input_bytes = 0
 
 
@@ -262,6 +272,10 @@ class ProcessPoolManager:
 
 
 
+
+        # ==================================
+        # WORKER LIMIT
+        # ==================================
 
         active_workers = min(
 
@@ -275,7 +289,7 @@ class ProcessPoolManager:
 
         print(
 
-            f"Active workers for job: {active_workers}"
+            f"Active workers limit: {active_workers}"
 
         )
 
@@ -286,7 +300,6 @@ class ProcessPoolManager:
         # ==================================
         # CREATE TASK
         # ==================================
-
 
         tasks = [
 
@@ -306,7 +319,6 @@ class ProcessPoolManager:
 
 
 
-        # calculate original size
 
 
         for task in tasks:
@@ -326,10 +338,19 @@ class ProcessPoolManager:
         # PROCESS POOL
         # ==================================
 
-
         self.executor = ProcessPoolExecutor(
 
             max_workers=active_workers
+
+        )
+
+
+        self.active_workers = active_workers
+
+
+        self.update_worker_status(
+
+            on_worker_update
 
         )
 
@@ -338,12 +359,14 @@ class ProcessPoolManager:
         try:
 
 
+            # ==============================
+            # SUBMIT JOB
+            # ==============================
 
             for task in tasks:
 
 
                 if self.cancelled:
-
 
                     break
 
@@ -358,6 +381,7 @@ class ProcessPoolManager:
                 )
 
 
+
                 self.futures.append(
 
                     future
@@ -367,11 +391,9 @@ class ProcessPoolManager:
 
 
 
-
-            # ==================================
-            # RESULT COLLECTION
-            # ==================================
-
+            # ==============================
+            # COLLECT RESULT
+            # ==============================
 
             for index, future in enumerate(
 
@@ -385,8 +407,8 @@ class ProcessPoolManager:
 
                 if self.cancelled:
 
-
                     break
+
 
 
 
@@ -408,6 +430,13 @@ class ProcessPoolManager:
 
 
                     failed += 1
+
+
+                    self.update_worker_status(
+
+                        on_worker_update
+
+                    )
 
 
                     continue
@@ -440,10 +469,21 @@ class ProcessPoolManager:
 
 
 
-                # ==================================
-                # FILE CALLBACK
-                # ==================================
+                # update worker setelah selesai
 
+                self.update_worker_status(
+
+                    on_worker_update
+
+                )
+
+
+
+
+
+                # ==========================
+                # FILE CALLBACK
+                # ==========================
 
                 if on_file:
 
@@ -458,10 +498,9 @@ class ProcessPoolManager:
 
 
 
-                # ==================================
+                # ==========================
                 # PROGRESS CALLBACK
-                # ==================================
-
+                # ==========================
 
                 if on_progress:
 
@@ -522,10 +561,29 @@ class ProcessPoolManager:
 
 
 
-        # ==================================
-        # COMPRESSION STATISTICS
-        # ==================================
+            # reset UI
+            self.active_workers = 0
 
+
+            if on_worker_update:
+
+                on_worker_update(
+
+                    0,
+
+                    self.workers
+
+                )
+
+
+
+
+
+
+
+        # ==================================
+        # COMPRESSION STATISTIC
+        # ==================================
 
         saved_percent = 0
 
@@ -574,17 +632,14 @@ class ProcessPoolManager:
                 self.cancelled,
 
 
-
             "input_bytes":
 
                 input_bytes,
 
 
-
             "output_bytes":
 
                 output_bytes,
-
 
 
             "saved_percent":

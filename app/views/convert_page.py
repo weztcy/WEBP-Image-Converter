@@ -5,28 +5,25 @@ import time
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QFileDialog,
     QMessageBox,
-    QScrollArea
+    QScrollArea,
+    QLabel,
+    QFrame,
+    QSizePolicy
 )
 
+from PySide6.QtCore import Qt
 
 
 from app.components.drop_section import DropSection
-
 from app.components.action_section import ActionSection
-
 from app.components.image_section import ImageSection
-
 from app.components.conversion_section import ConversionSection
-
 from app.components.process_section import ProcessSection
 
-
-
 from app.core.conversion_thread import ConversionThread
-
-
 
 
 
@@ -40,7 +37,6 @@ class ConvertPage(QWidget):
 
         self.worker = None
 
-
         self.start_time = None
 
 
@@ -49,8 +45,7 @@ class ConvertPage(QWidget):
         self.init_ui()
 
         self.connect_signals()
-
-
+    
 
 
 
@@ -58,38 +53,230 @@ class ConvertPage(QWidget):
     # COMPONENTS
     # ==================================================
 
-
     def init_components(self):
-
 
         self.drop_section = DropSection()
 
-
         self.action_section = ActionSection()
-
 
         self.image_section = ImageSection()
 
-
         self.conversion_section = ConversionSection()
 
-
         self.process_section = ProcessSection()
-
-
+        
 
 
 
     # ==================================================
-    # UI
+    # UI PREMIUM WORKSPACE
     # ==================================================
-
 
     def init_ui(self):
 
 
-        main_layout = QVBoxLayout()
+        self.setStyleSheet(
+            """
 
+            QWidget {
+
+                font-family:
+                "Inter",
+                "Segoe UI";
+
+            }
+
+
+            QWidget#convertPage {
+
+                background-color:#0F1115;
+
+            }
+
+
+            QLabel#pageTitle {
+
+                color:#F9FAFB;
+
+                font-size:28px;
+
+                font-weight:800;
+
+            }
+
+
+            QLabel#pageSubtitle {
+
+                color:#98A2B3;
+
+                font-size:14px;
+
+            }
+
+
+            QLabel#sectionTitle {
+
+                color:#7EA6FF;
+
+                font-size:13px;
+
+                font-weight:800;
+
+            }
+
+
+
+            QLabel#step {
+
+                color:#7EA6FF;
+
+                background-color:#172033;
+
+                border-radius:12px;
+
+                padding:8px 14px;
+
+                font-size:12px;
+
+                font-weight:700;
+
+            }
+
+            """
+
+        )
+
+
+        self.setObjectName(
+            "convertPage"
+        )
+
+
+        root = QVBoxLayout(self)
+
+
+        root.setContentsMargins(
+            24,
+            24,
+            24,
+            24
+        )
+
+
+        root.setSpacing(
+            0
+        )
+
+
+
+        # ===============================
+        # PAGE HEADER
+        # ===============================
+
+
+        header = QVBoxLayout()
+
+        header.setSpacing(
+            8
+        )
+
+
+        title = QLabel(
+            "⚡ Conversion Workspace"
+        )
+
+        title.setObjectName(
+            "pageTitle"
+        )
+
+        title.setAlignment(
+            Qt.AlignCenter
+        )
+
+
+
+        subtitle = QLabel(
+            "Transform your images into optimized WEBP files with a professional workflow."
+        )
+
+        subtitle.setObjectName(
+            "pageSubtitle"
+        )
+
+        subtitle.setAlignment(
+            Qt.AlignCenter
+        )
+
+
+
+        steps = QHBoxLayout()
+
+        steps.setSpacing(
+            10
+        )
+
+
+        for text in [
+
+            "① Import Images",
+
+            "② Configure Settings",
+
+            "③ Convert & Optimize"
+
+        ]:
+
+            badge = QLabel(
+                text
+            )
+
+            badge.setObjectName(
+                "step"
+            )
+
+            badge.setAlignment(
+                Qt.AlignCenter
+            )
+
+            steps.addWidget(
+                badge
+            )
+
+
+        # membuat group badge tetap di tengah
+        steps.setAlignment(
+            Qt.AlignCenter
+        )
+
+
+
+        header.addWidget(
+            title
+        )
+
+        header.addWidget(
+            subtitle
+        )
+
+        header.addSpacing(
+            6
+        )
+
+        header.addLayout(
+            steps
+        )
+
+
+        # membuat seluruh header center
+        header.setAlignment(
+            Qt.AlignCenter
+        )
+
+
+
+        # ===============================
+        # SCROLL AREA
+        # ===============================
 
 
         self.scroll_area = QScrollArea()
@@ -100,31 +287,215 @@ class ConvertPage(QWidget):
         )
 
 
+        self.scroll_area.setFrameShape(
+            QFrame.NoFrame
+        )
 
-        self.content_widget = QWidget()
+
+        # HIDE SCROLLBAR
+        self.scroll_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff
+        )
 
 
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff
+        )
 
-        layout = QVBoxLayout(
-            self.content_widget
+        self.scroll_area.setStyleSheet(
+            """
+
+            QScrollArea {
+
+                background:transparent;
+
+                border:none;
+
+            }
+
+
+            QScrollArea QWidget {
+
+                background:transparent;
+
+            }
+
+
+            QScrollArea > QWidget > QWidget {
+
+                background:transparent;
+
+            }
+
+
+            QScrollBar:vertical {
+
+                background:transparent;
+
+                width:6px;
+
+                margin:0px;
+
+            }
+
+
+            QScrollBar::handle:vertical {
+
+                background:#30384A;
+
+                border-radius:3px;
+
+            }
+
+
+            QScrollBar::handle:vertical:hover {
+
+                background:#4F8CFF;
+
+            }
+
+
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+
+                height:0px;
+
+            }
+
+            """
         )
 
 
 
-        widgets = [
-            self.drop_section,
-            self.image_section,
-            self.conversion_section,
-            self.action_section,
-            self.process_section
+        self.content_widget = QWidget()
+
+        self.content_widget.setStyleSheet(
+            """
+            QWidget {
+                background:transparent;
+            }
+            """
+        )
+
+
+        content_layout = QVBoxLayout(
+            self.content_widget
+        )
+
+
+        content_layout.setContentsMargins(
+            0,
+            10,
+            0,
+            20
+        )
+
+
+        content_layout.setSpacing(
+            18
+        )
+
+
+        content_layout.addSpacing(
+            24
+        )
+
+
+        content_layout.addLayout(
+            header
+        )
+
+
+        content_layout.addSpacing(
+            12
+        )
+
+
+
+        # ==================================
+        # PREMIUM FULL PAGE WORKSPACE
+        # ==================================
+
+        sections = [
+
+            (
+                "",
+                self.drop_section
+            ),
+
+            (
+                "",
+                self.image_section
+            ),
+
+            (
+                "",
+                self.conversion_section
+            ),
+
+            (
+                "",
+                self.action_section
+            ),
+
+            (
+                "",
+                self.process_section
+            ),
+
         ]
 
 
+        for title_text, widget in sections:
 
-        for widget in widgets:
+            section_layout = QVBoxLayout()
 
-            layout.addWidget(
+            section_layout.setSpacing(
+                10
+            )
+
+
+            label = QLabel(
+                title_text
+            )
+
+
+            label.setObjectName(
+                "sectionTitle"
+            )
+
+
+            label.setStyleSheet(
+                """
+
+                QLabel {
+
+                    color:#7EA6FF;
+
+                    font-size:13px;
+
+                    font-weight:800;
+
+                    letter-spacing:1px;
+
+                }
+
+                """
+            )
+
+
+            section_layout.addWidget(
+                label
+            )
+
+
+            section_layout.addWidget(
                 widget
+            )
+
+
+            content_layout.addLayout(
+                section_layout
             )
 
 
@@ -134,23 +505,14 @@ class ConvertPage(QWidget):
         )
 
 
-        main_layout.addWidget(
+        root.addWidget(
             self.scroll_area
         )
-
-
-        self.setLayout(
-            main_layout
-        )
-
-
-
 
 
     # ==================================================
     # SIGNAL CONNECTION
     # ==================================================
-
 
     def connect_signals(self):
 
@@ -173,19 +535,6 @@ class ConvertPage(QWidget):
         self.drop_section.add_folder_button.clicked.connect(
             self.add_folder
         )
-        
-
-
-        
-
-
-        
-
-
-        
-
-
-        
 
 
         self.action_section.convert_selected_clicked.connect(
@@ -198,10 +547,10 @@ class ConvertPage(QWidget):
         )
 
 
-
         self.process_section.open_folder_clicked.connect(
             self.open_output_folder
         )
+        
 
 
         self.action_section.cancel_clicked.connect(
@@ -210,12 +559,9 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # IMAGE INPUT
     # ==================================================
-
 
     def add_single_image(self):
 
@@ -238,8 +584,6 @@ class ConvertPage(QWidget):
             self.image_section.add_images(
                 [file]
             )
-
-
 
 
 
@@ -267,8 +611,6 @@ class ConvertPage(QWidget):
 
 
 
-
-
     def add_folder(self):
 
 
@@ -289,8 +631,6 @@ class ConvertPage(QWidget):
 
 
 
-
-
     def delete_all(self):
 
 
@@ -304,12 +644,9 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # CONVERSION REQUEST
     # ==================================================
-
 
     def convert_selected(self):
 
@@ -341,8 +678,6 @@ class ConvertPage(QWidget):
             [image]
 
         )
-
-
 
 
 
@@ -379,20 +714,22 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # START CONVERSION
     # ==================================================
 
-
     def start_conversion(
+
             self,
+
             images
+
     ):
 
 
+
         if self.worker:
+
 
 
             QMessageBox.warning(
@@ -410,9 +747,9 @@ class ConvertPage(QWidget):
 
 
 
-
-
-        self.action_section.set_processing(True)
+        self.action_section.set_processing(
+            True
+        )
 
 
         self.process_section.reset()
@@ -421,8 +758,6 @@ class ConvertPage(QWidget):
         self.process_section.set_processing()
 
 
-
-        # TIMER START
 
         self.start_time = time.perf_counter()
 
@@ -444,19 +779,22 @@ class ConvertPage(QWidget):
 
 
         print(
+
             "Conversion Settings:",
+
             settings
+
         )
 
 
         print(
+
             "Output:",
+
             output_folder
+
         )
 
-
-
-        # PERFORMANCE INFO
 
 
         self.process_section.set_profile(
@@ -483,6 +821,10 @@ class ConvertPage(QWidget):
             output_folder
 
         )
+        
+        self.worker.worker_changed.connect(
+            self.process_section.performance.update_worker
+        )
 
 
 
@@ -493,11 +835,13 @@ class ConvertPage(QWidget):
         )
 
 
+
         self.worker.progress_changed.connect(
 
             self.update_progress
 
         )
+
 
 
         self.worker.conversion_finished.connect(
@@ -507,11 +851,13 @@ class ConvertPage(QWidget):
         )
 
 
+
         self.worker.conversion_failed.connect(
 
             self.conversion_failed
 
         )
+
 
 
         self.worker.finished.connect(
@@ -527,11 +873,9 @@ class ConvertPage(QWidget):
 
 
 
-
     # ==================================================
     # PERFORMANCE
     # ==================================================
-
 
     def get_worker_count(self):
 
@@ -549,6 +893,7 @@ class ConvertPage(QWidget):
             config = PerformanceConfig()
 
 
+
             return config.calculate_workers()
 
 
@@ -560,18 +905,20 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # THREAD UPDATE
     # ==================================================
 
-
     def update_progress(
+
             self,
+
             progress,
+
             success,
+
             failed
+
     ):
 
 
@@ -592,20 +939,22 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # FINISHED
     # ==================================================
 
-
     def conversion_finished(
+
             self,
+
             result
+
     ):
+        self.action_section.set_processing(
+            False
+        )
 
 
-        self.action_section.set_processing(False)
 
         duration = 0
 
@@ -671,12 +1020,14 @@ class ConvertPage(QWidget):
 
 
 
-
-
         if result.get(
+
             "cancelled",
+
             False
+
         ):
+
 
 
             self.process_section.set_cancelled()
@@ -698,6 +1049,7 @@ class ConvertPage(QWidget):
         else:
 
 
+
             self.process_section.set_completed()
 
 
@@ -709,7 +1061,9 @@ class ConvertPage(QWidget):
                 "Conversion Complete",
 
                 f"Success: {result['success']}\n"
+
                 f"Failed: {result['failed']}\n"
+
                 f"Time: {duration:.2f}s"
 
             )
@@ -717,11 +1071,14 @@ class ConvertPage(QWidget):
 
 
 
-
     def conversion_failed(
+
             self,
+
             error
+
     ):
+
 
 
         self.action_section.set_processing(
@@ -747,12 +1104,9 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # CLEANUP
     # ==================================================
-
 
     def cleanup_worker(self):
 
@@ -771,12 +1125,9 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # CANCEL
     # ==================================================
-
 
     def cancel_processing(self):
 
@@ -792,12 +1143,9 @@ class ConvertPage(QWidget):
 
 
 
-
-
     # ==================================================
     # OUTPUT
     # ==================================================
-
 
     def open_output_folder(self):
 
@@ -814,3 +1162,7 @@ class ConvertPage(QWidget):
 
 
             os.startfile(folder)
+            
+    def closeEvent(self, event):
+
+        event.accept()

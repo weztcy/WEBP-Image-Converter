@@ -1,23 +1,38 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame
+)
+
 from PySide6.QtCore import Signal
 
+
 from app.widgets.process_status import ProcessStatus
-from app.widgets.performance_monitor import PerformanceMonitor
+from app.widgets.performance_panel import PerformancePanel
 from app.widgets.conversion_stats import ConversionStats
+
 
 
 class ProcessSection(QWidget):
 
-    # expose signal agar ConvertPage tetap kompatibel
+
     open_folder_clicked = Signal()
 
 
+
     def __init__(self):
+
         super().__init__()
 
+
         self.init_components()
+
         self.init_ui()
+
         self.connect_signals()
+
 
 
     # ==================================
@@ -26,9 +41,13 @@ class ProcessSection(QWidget):
 
     def init_components(self):
 
+
         self.process_status = ProcessStatus()
 
-        self.performance = PerformanceMonitor()
+
+        # menggunakan chart performance
+        self.performance = PerformancePanel()
+
 
         self.stats = ConversionStats()
 
@@ -40,36 +59,284 @@ class ProcessSection(QWidget):
 
     def init_ui(self):
 
-        layout = QVBoxLayout()
+
+        self.setStyleSheet(
+            """
+
+            QWidget {
+
+                font-family:
+                "Inter",
+                "Segoe UI";
+
+            }
 
 
-        # Status utama
+            QFrame#monitorCard {
+
+                background:#151922;
+
+                border:1px solid #242938;
+
+                border-radius:24px;
+
+            }
+
+
+            QFrame#innerCard {
+
+                background:#10141C;
+
+                border-radius:18px;
+
+            }
+
+
+            QLabel#title {
+
+                color:#F9FAFB;
+
+                font-size:17px;
+
+                font-weight:800;
+
+            }
+
+
+            QLabel#subtitle {
+
+                color:#98A2B3;
+
+                font-size:13px;
+
+            }
+
+
+            QLabel#sectionLabel {
+
+                color:#7EA6FF;
+
+                font-size:11px;
+
+                font-weight:700;
+
+                letter-spacing:1px;
+
+            }
+
+            """
+        )
+
+
+
+        root = QVBoxLayout(self)
+
+        root.setContentsMargins(
+            0,
+            0,
+            0,
+            0
+        )
+
+
+        card = QFrame()
+
+        card.setObjectName(
+            "monitorCard"
+        )
+
+
+        layout = QVBoxLayout(card)
+
+
+        layout.setContentsMargins(
+            22,
+            22,
+            22,
+            22
+        )
+
+
+        layout.setSpacing(
+            16
+        )
+
+
+
+        # HEADER
+
+        title = QLabel(
+            "📊 Processing Monitor"
+        )
+
+        title.setObjectName(
+            "title"
+        )
+
+
+        subtitle = QLabel(
+            "Track conversion progress, performance, and output statistics."
+        )
+
+        subtitle.setObjectName(
+            "subtitle"
+        )
+
+
+        layout.addWidget(title)
+
+        layout.addWidget(subtitle)
+
+
+
+        # STATUS
+
+        status_label = QLabel(
+            "CURRENT PROCESS"
+        )
+
+        status_label.setObjectName(
+            "sectionLabel"
+        )
+
+
         layout.addWidget(
+            status_label
+        )
+
+
+        status_card = QFrame()
+
+        status_card.setObjectName(
+            "innerCard"
+        )
+
+
+        status_layout = QVBoxLayout(
+            status_card
+        )
+
+
+        status_layout.setContentsMargins(
+            14,
+            14,
+            14,
+            14
+        )
+
+
+        status_layout.addWidget(
             self.process_status
         )
 
 
-        # Monitor + Statistik
-        bottom_layout = QHBoxLayout()
+        layout.addWidget(
+            status_card
+        )
 
 
-        bottom_layout.addWidget(
+
+        # PERFORMANCE + STATISTICS
+
+        dashboard_label = QLabel(
+            "PERFORMANCE & STATISTICS"
+        )
+
+        dashboard_label.setObjectName(
+            "sectionLabel"
+        )
+
+
+        layout.addWidget(
+            dashboard_label
+        )
+
+
+
+        bottom = QHBoxLayout()
+
+        bottom.setSpacing(
+            16
+        )
+
+
+
+        # LEFT : PERFORMANCE PANEL
+
+        performance_card = QFrame()
+
+        performance_card.setObjectName(
+            "innerCard"
+        )
+
+
+        performance_layout = QVBoxLayout(
+            performance_card
+        )
+
+
+        performance_layout.setContentsMargins(
+            14,
+            14,
+            14,
+            14
+        )
+
+
+        performance_layout.addWidget(
             self.performance
         )
 
 
-        bottom_layout.addWidget(
+
+        # RIGHT : STATISTICS
+
+        stats_card = QFrame()
+
+        stats_card.setObjectName(
+            "innerCard"
+        )
+
+
+        stats_layout = QVBoxLayout(
+            stats_card
+        )
+
+
+        stats_layout.setContentsMargins(
+            14,
+            14,
+            14,
+            14
+        )
+
+
+        stats_layout.addWidget(
             self.stats
         )
 
 
-        layout.addLayout(
-            bottom_layout
+
+        bottom.addWidget(
+            performance_card,
+            1
         )
 
 
-        self.setLayout(
-            layout
+        bottom.addWidget(
+            stats_card,
+            1
+        )
+
+
+
+        layout.addLayout(
+            bottom
+        )
+
+
+        root.addWidget(
+            card
         )
 
 
@@ -96,15 +363,25 @@ class ProcessSection(QWidget):
 
 
         self.stats.update_stats({
-            "total": 0,
-            "success": 0,
-            "failed": 0,
-            "duration": 0,
-            "speed": 0,
-            "input_mb": 0,
-            "output_mb": 0,
-            "saved_percent": 0
+
+            "total":0,
+
+            "success":0,
+
+            "failed":0,
+
+            "duration":0,
+
+            "speed":0,
+
+            "input_mb":0,
+
+            "output_mb":0,
+
+            "saved_percent":0
+
         })
+
 
 
     def set_processing(self):
@@ -112,14 +389,17 @@ class ProcessSection(QWidget):
         self.process_status.set_processing()
 
 
+
     def set_completed(self):
 
         self.process_status.set_completed()
 
 
+
     def set_cancelled(self):
 
         self.process_status.set_cancelled()
+
 
 
     def set_idle(self):
@@ -134,17 +414,13 @@ class ProcessSection(QWidget):
 
     def update_file(self, filename):
 
-        self.process_status.update_file(
-            filename
-        )
+        self.process_status.update_file(filename)
 
 
 
     def update_progress(self, progress):
 
-        self.process_status.update_progress(
-            progress
-        )
+        self.process_status.update_progress(progress)
 
 
 
@@ -163,9 +439,7 @@ class ProcessSection(QWidget):
 
     def update_statistics(self, data):
 
-        self.stats.update_stats(
-            data
-        )
+        self.stats.update_stats(data)
 
 
 
@@ -175,14 +449,24 @@ class ProcessSection(QWidget):
 
     def set_profile(self, profile):
 
-        self.performance.set_profile(
-            profile
-        )
+        if hasattr(
+            self.performance,
+            "set_profile"
+        ):
+            self.performance.set_profile(profile)
 
 
 
     def set_workers(self, workers):
 
-        self.performance.set_worker_info(
-            workers
-        )
+        if hasattr(
+            self.performance,
+            "set_worker_info"
+        ):
+            self.performance.set_worker_info(workers)
+
+        elif hasattr(
+            self.performance,
+            "set_workers"
+        ):
+            self.performance.set_workers(workers)

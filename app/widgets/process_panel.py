@@ -1,17 +1,14 @@
 from PySide6.QtWidgets import (
     QWidget,
-    QVBoxLayout
+    QVBoxLayout,
+    QLabel,
+    QFrame
 )
-
 
 from PySide6.QtCore import Signal
 
 
-from app.widgets.process_status import (
-    ProcessStatus
-)
-
-
+from app.widgets.process_status import ProcessStatus
 
 
 
@@ -22,13 +19,9 @@ class ProcessPanel(QWidget):
     # SIGNAL
     # ==========================
 
-
     cancel_clicked = Signal()
 
-
     open_folder_clicked = Signal()
-
-
 
 
 
@@ -45,12 +38,9 @@ class ProcessPanel(QWidget):
 
 
 
-
-
     # ==========================
     # COMPONENT
     # ==========================
-
 
     def init_components(self):
 
@@ -59,42 +49,145 @@ class ProcessPanel(QWidget):
 
 
 
-
-
     # ==========================
     # UI
     # ==========================
 
-
     def init_ui(self):
 
 
-        layout = QVBoxLayout()
+        self.setStyleSheet(
+            """
 
+            QWidget {
+
+                font-family:
+                "Inter",
+                "Segoe UI";
+
+            }
+
+
+
+            QFrame#panelCard {
+
+                background:#10141C;
+
+                border:1px solid #242938;
+
+                border-radius:18px;
+
+            }
+
+
+
+            QLabel#title {
+
+                color:#F9FAFB;
+
+                font-size:14px;
+
+                font-weight:800;
+
+            }
+
+
+
+            QLabel#subtitle {
+
+                color:#98A2B3;
+
+                font-size:12px;
+
+            }
+
+            """
+        )
+
+
+
+        root = QVBoxLayout(self)
+
+
+        root.setContentsMargins(
+            0,
+            0,
+            0,
+            0
+        )
+
+
+        card = QFrame()
+
+        card.setObjectName(
+            "panelCard"
+        )
+
+
+        layout = QVBoxLayout(card)
+
+
+        layout.setContentsMargins(
+            18,
+            18,
+            18,
+            18
+        )
+
+
+        layout.setSpacing(
+            10
+        )
+
+
+
+        title = QLabel(
+            "Current Process"
+        )
+
+        title.setObjectName(
+            "title"
+        )
+
+
+        subtitle = QLabel(
+            "Monitor conversion progress and current activity."
+        )
+
+        subtitle.setObjectName(
+            "subtitle"
+        )
 
 
         layout.addWidget(
+            title
+        )
 
+
+        layout.addWidget(
+            subtitle
+        )
+
+
+        layout.addSpacing(
+            8
+        )
+
+
+        layout.addWidget(
             self.process_status
-
         )
 
 
-
-        self.setLayout(
-
-            layout
-
+        root.addWidget(
+            card
         )
-
-
 
 
 
     # ==========================
     # SIGNAL
     # ==========================
-
 
     def connect_signals(self):
 
@@ -114,55 +207,37 @@ class ProcessPanel(QWidget):
 
 
 
-
-
     # ==========================
     # PUBLIC API
     # ==========================
 
-
     def reset(self):
-
 
         self.process_status.reset()
 
 
 
-
-
     def set_processing(self):
-
 
         self.process_status.set_processing()
 
 
 
-
-
     def set_completed(self):
-
 
         self.process_status.set_completed()
 
 
 
-
-
     def set_cancelled(self):
-
 
         self.process_status.set_cancelled()
 
 
 
-
-
     def set_idle(self):
 
-
         self.process_status.set_idle()
-
-
 
 
 
@@ -180,8 +255,6 @@ class ProcessPanel(QWidget):
 
 
 
-
-
     def update_progress(
             self,
             progress
@@ -193,8 +266,6 @@ class ProcessPanel(QWidget):
             progress
 
         )
-
-
 
 
 

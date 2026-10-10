@@ -1,14 +1,17 @@
 from PySide6.QtWidgets import QLabel
 
+from PySide6.QtGui import (
+    QPixmap,
+    QFont
+)
 
-from PySide6.QtGui import QPixmap
-
-
-from PySide6.QtCore import Qt
+from PySide6.QtCore import (
+    Qt,
+    QSize
+)
 
 
 from app.core.thumbnail_cache import ThumbnailCache
-
 from app.core.preview_loader import PreviewLoader
 
 
@@ -25,31 +28,67 @@ class ImagePreview(QLabel):
 
 
         self.preview_cache = ThumbnailCache(
-
-            size=400
-
+            size=600
         )
 
 
         self.loader = None
 
 
-
         self.pixmap_cache = {}
 
 
 
-        self.setAlignment(
+        self.current_pixmap = None
 
-            Qt.AlignCenter
 
+
+        # ==========================
+        # PREMIUM PREVIEW STYLE
+        # ==========================
+
+
+        self.setStyleSheet(
+            """
+
+            QLabel {
+
+                background:#10141C;
+
+                border:1px solid #242938;
+
+                border-radius:18px;
+
+                color:#667085;
+
+                font-size:14px;
+
+                font-weight:600;
+
+            }
+
+            """
         )
 
 
-        self.setMinimumHeight(
 
-            300
+        self.setAlignment(
+            Qt.AlignCenter
+        )
 
+
+        # 16:10 ratio base
+
+        self.setMinimumSize(
+            QSize(
+                480,
+                300
+            )
+        )
+
+
+        self.setMaximumHeight(
+            360
         )
 
 
@@ -57,6 +96,11 @@ class ImagePreview(QLabel):
 
 
 
+
+
+    # ==========================
+    # SHOW IMAGE
+    # ==========================
 
 
     def show_image(
@@ -74,26 +118,22 @@ class ImagePreview(QLabel):
 
 
         key = str(
-
             image.path
-
         )
 
 
 
-        # ==========================
-        # MEMORY CACHE
-        # ==========================
-
+        # CACHE
 
         if key in self.pixmap_cache:
 
 
-            self.setPixmap(
-
+            self.current_pixmap = (
                 self.pixmap_cache[key]
-
             )
+
+
+            self.update_preview_size()
 
             return
 
@@ -101,13 +141,10 @@ class ImagePreview(QLabel):
 
 
 
-        # ==========================
         # ASYNC LOAD
-        # ==========================
 
 
         if self.loader:
-
 
             self.loader.quit()
 
@@ -120,6 +157,7 @@ class ImagePreview(QLabel):
             self.preview_cache
 
         )
+
 
 
         self.loader.preview_ready.connect(
@@ -143,6 +181,11 @@ class ImagePreview(QLabel):
 
 
 
+    # ==========================
+    # SET PREVIEW
+    # ==========================
+
+
     def set_preview(
             self,
             key,
@@ -161,25 +204,89 @@ class ImagePreview(QLabel):
         self.pixmap_cache[key] = pixmap
 
 
+        self.current_pixmap = pixmap
+
+
+        self.update_preview_size()
+
+
+
+
+
+    # ==========================
+    # KEEP RATIO
+    # ==========================
+
+
+    def update_preview_size(self):
+
+
+        if self.current_pixmap is None:
+
+            return
+
+
+
+        scaled = self.current_pixmap.scaled(
+
+            self.size(),
+
+            Qt.KeepAspectRatio,
+
+            Qt.SmoothTransformation
+
+        )
+
 
         self.setPixmap(
-
-            pixmap
-
+            scaled
         )
 
 
 
 
 
+    # ==========================
+    # RESIZE EVENT
+    # ==========================
+
+
+    def resizeEvent(
+            self,
+            event
+    ):
+
+
+        self.update_preview_size()
+
+
+        super().resizeEvent(
+            event
+        )
+
+
+
+
+
+    # ==========================
+    # EMPTY STATE
+    # ==========================
+
+
     def show_empty(self):
+
+
+        self.current_pixmap = None
 
 
         self.clear()
 
 
         self.setText(
+            "🖼\n\nImage Preview\n\nSelect an image to preview"
+        )
 
-            "Image Preview"
 
+        self.setAlignment(
+            Qt.AlignCenter
         )

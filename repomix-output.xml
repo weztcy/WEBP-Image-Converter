@@ -41,15 +41,31 @@ The content is organized as follows:
 
 <directory_structure>
 app/
+  components/
+    __init__.py
+    action_section.py
+    conversion_section.py
+    drop_section.py
+    image_section.py
+    process_section.py
   core/
     __init__.py
     config.py
+    conversion_thread.py
+    conversion_worker.py
     converter.py
     image_loader.py
-    process_manager.py
+    image_scanner.py
+    performance_config.py
+    preview_loader.py
+    process_pool.py
+    thumbnail_cache.py
+    thumbnail_loader.py
+    webp_profile.py
   models/
     __init__.py
     image_model.py
+    process_result.py
   utils/
     __init__.py
     file_utils.py
@@ -60,10 +76,17 @@ app/
     main_window.py
   widgets/
     __init__.py
+    conversion_info.py
+    conversion_panel.py
+    conversion_stats.py
+    convert_toolbar.py
     drop_area.py
     image_list.py
+    image_manager.py
     image_preview.py
     output_panel.py
+    performance_monitor.py
+    process_panel.py
     process_status.py
     settings_panel.py
   __init__.py
@@ -72,166 +95,1092 @@ app/
 main.py
 README.md
 requirements.txt
+test_hardware.py
+test_performance.py
+test_pool.py
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
 
+<file path="app/components/__init__.py">
+
+</file>
+
+<file path="app/components/action_section.py">
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton
+from PySide6.QtCore import Signal
+
+
+class ActionSection(QWidget):
+
+    convert_selected_clicked = Signal()
+    convert_all_clicked = Signal()
+    cancel_clicked = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QHBoxLayout(self)
+
+        self.convert_selected_button = QPushButton("Convert Selected")
+        self.convert_all_button = QPushButton("Convert All")
+        self.cancel_button = QPushButton("Cancel")
+
+        self.cancel_button.hide()
+
+        self.convert_selected_button.clicked.connect(
+            self.convert_selected_clicked.emit
+        )
+        self.convert_all_button.clicked.connect(
+            self.convert_all_clicked.emit
+        )
+        self.cancel_button.clicked.connect(
+            self.cancel_clicked.emit
+        )
+
+        layout.addWidget(self.convert_selected_button)
+        layout.addWidget(self.convert_all_button)
+        layout.addWidget(self.cancel_button)
+
+    def set_processing(self, state=True):
+        self.convert_selected_button.setVisible(not state)
+        self.convert_all_button.setVisible(not state)
+        self.cancel_button.setVisible(state)
+
+        if state:
+            self.layout().setStretch(0, 0)
+            self.layout().setStretch(1, 0)
+            self.layout().setStretch(2, 1)
+        else:
+            self.layout().setStretch(0, 1)
+            self.layout().setStretch(1, 1)
+            self.layout().setStretch(2, 0)
+</file>
+
+<file path="app/components/conversion_section.py">
+from PySide6.QtWidgets import QWidget,QVBoxLayout
+from app.widgets.settings_panel import SettingsPanel
+from app.widgets.conversion_info import ConversionInfo
+from app.widgets.output_panel import OutputPanel
+
+class ConversionSection(QWidget):
+    def __init__(self):
+        super().__init__()
+        l=QVBoxLayout(self)
+        self.settings_panel=SettingsPanel()
+        self.info=ConversionInfo()
+        self.output_panel=OutputPanel()
+        l.addWidget(self.info)
+        l.addWidget(self.settings_panel)
+        l.addWidget(self.output_panel)
+    def get_settings(self): return self.settings_panel.get_settings()
+    def get_output_folder(self): return self.output_panel.get_output_folder()
+    def set_profile(self, profile):
+
+        self.settings_panel.set_profile(
+            profile
+        )
+
+
+    def set_workers(self, workers):
+
+        self.settings_panel.set_workers(
+            workers
+        )
+
+
+    def update_statistics(self, data):
+
+        if hasattr(self, "stats"):
+            self.stats.update_stats(data)
+
+
+    def reset(self):
+
+        self.settings_panel.reset()
+
+        self.output_panel.reset()
+</file>
+
+<file path="app/components/drop_section.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QPushButton
+)
+
+from app.widgets.drop_area import DropArea
+
+
+class DropSection(QWidget):
+
+    def __init__(self):
+        super().__init__()
+
+        self.init_ui()
+
+
+    def init_ui(self):
+
+        main = QHBoxLayout(self)
+
+
+        self.drop_area = DropArea()
+
+
+        button_layout = QVBoxLayout()
+
+
+        self.add_image_button = QPushButton(
+            "Add Image"
+        )
+
+        self.add_multiple_button = QPushButton(
+            "Add Multiple Images"
+        )
+
+        self.add_folder_button = QPushButton(
+            "Add Folder"
+        )
+
+
+        button_layout.addWidget(
+            self.add_image_button
+        )
+
+        button_layout.addWidget(
+            self.add_multiple_button
+        )
+
+        button_layout.addWidget(
+            self.add_folder_button
+        )
+
+
+        main.addWidget(
+            self.drop_area,
+            1
+        )
+
+
+        main.addLayout(
+            button_layout,
+            1
+        )
+</file>
+
+<file path="app/components/image_section.py">
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton
+from app.widgets.image_list import ImageList
+from app.widgets.image_preview import ImagePreview
+from app.core.image_loader import load_files
+
+class ImageSection(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.images=[]
+        self.selected_image=None
+        self.image_list=ImageList()
+        self.preview=ImagePreview()
+        self.remove_button=QPushButton("Remove Selected")
+        self.delete_button=QPushButton("Delete All")
+        self.init_ui()
+        self.image_list.image_selected.connect(self._selected)
+    def init_ui(self):
+        root=QVBoxLayout(self)
+        row=QHBoxLayout()
+        row.addWidget(self.image_list,2)
+        row.addWidget(self.preview,1)
+        actions=QHBoxLayout()
+        actions.addWidget(self.remove_button)
+        actions.addWidget(self.delete_button)
+        root.addLayout(row)
+        root.addLayout(actions)
+        self.remove_button.clicked.connect(self.remove_selected)
+        self.delete_button.clicked.connect(self.clear)
+    def _selected(self,img):
+        self.selected_image=img
+        self.preview.show_image(img)
+    def add_images(self, files):
+        imgs=load_files(files)
+        self.images.extend(imgs)
+        self.image_list.add_images(imgs)
+    def add_paths(self, paths):
+        for p in paths:
+            self.add_images([p])
+    def add_folder(self, folder):
+        from app.core.image_scanner import ImageScanner
+        self.scanner=ImageScanner(folder)
+        self.scanner.image_found.connect(lambda x:(self.images.append(x),self.image_list.add_images([x])))
+        self.scanner.start()
+    def get_selected(self): return self.selected_image
+    def get_images(self): return self.images
+    def remove_selected(self):
+        if self.selected_image in self.images: self.images.remove(self.selected_image)
+        self.image_list.remove_selected()
+        self.preview.show_empty()
+        self.selected_image=None
+    def clear(self):
+        self.images.clear()
+        self.image_list.clear()
+        self.preview.show_empty()
+        self.selected_image=None
+</file>
+
+<file path="app/components/process_section.py">
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PySide6.QtCore import Signal
+
+from app.widgets.process_status import ProcessStatus
+from app.widgets.performance_monitor import PerformanceMonitor
+from app.widgets.conversion_stats import ConversionStats
+
+
+class ProcessSection(QWidget):
+
+    # expose signal agar ConvertPage tetap kompatibel
+    open_folder_clicked = Signal()
+
+
+    def __init__(self):
+        super().__init__()
+
+        self.init_components()
+        self.init_ui()
+        self.connect_signals()
+
+
+    # ==================================
+    # COMPONENTS
+    # ==================================
+
+    def init_components(self):
+
+        self.process_status = ProcessStatus()
+
+        self.performance = PerformanceMonitor()
+
+        self.stats = ConversionStats()
+
+
+
+    # ==================================
+    # UI
+    # ==================================
+
+    def init_ui(self):
+
+        layout = QVBoxLayout()
+
+
+        # Status utama
+        layout.addWidget(
+            self.process_status
+        )
+
+
+        # Monitor + Statistik
+        bottom_layout = QHBoxLayout()
+
+
+        bottom_layout.addWidget(
+            self.performance
+        )
+
+
+        bottom_layout.addWidget(
+            self.stats
+        )
+
+
+        layout.addLayout(
+            bottom_layout
+        )
+
+
+        self.setLayout(
+            layout
+        )
+
+
+
+    # ==================================
+    # SIGNAL
+    # ==================================
+
+    def connect_signals(self):
+
+        self.process_status.open_folder_clicked.connect(
+            self.open_folder_clicked.emit
+        )
+
+
+
+    # ==================================
+    # STATUS API
+    # ==================================
+
+    def reset(self):
+
+        self.process_status.reset()
+
+
+        self.stats.update_stats({
+            "total": 0,
+            "success": 0,
+            "failed": 0,
+            "duration": 0,
+            "speed": 0,
+            "input_mb": 0,
+            "output_mb": 0,
+            "saved_percent": 0
+        })
+
+
+    def set_processing(self):
+
+        self.process_status.set_processing()
+
+
+    def set_completed(self):
+
+        self.process_status.set_completed()
+
+
+    def set_cancelled(self):
+
+        self.process_status.set_cancelled()
+
+
+    def set_idle(self):
+
+        self.process_status.set_idle()
+
+
+
+    # ==================================
+    # PROCESS UPDATE
+    # ==================================
+
+    def update_file(self, filename):
+
+        self.process_status.update_file(
+            filename
+        )
+
+
+
+    def update_progress(self, progress):
+
+        self.process_status.update_progress(
+            progress
+        )
+
+
+
+    def update_result(self, success, failed):
+
+        self.process_status.update_result(
+            success,
+            failed
+        )
+
+
+
+    # ==================================
+    # STATISTICS
+    # ==================================
+
+    def update_statistics(self, data):
+
+        self.stats.update_stats(
+            data
+        )
+
+
+
+    # ==================================
+    # PERFORMANCE
+    # ==================================
+
+    def set_profile(self, profile):
+
+        self.performance.set_profile(
+            profile
+        )
+
+
+
+    def set_workers(self, workers):
+
+        self.performance.set_worker_info(
+            workers
+        )
+</file>
+
 <file path="app/core/__init__.py">
 
 </file>
 
-<file path="app/core/config.py">
-from pathlib import Path
+<file path="app/core/conversion_thread.py">
+from PySide6.QtCore import (
+    QThread,
+    Signal
+)
+
+
+from app.core.process_pool import (
+    ProcessPoolManager
+)
 
 
 
-APP_NAME = "Image2WEBP Converter"
-
-APP_VERSION = "1.0.0"
 
 
-
-def get_default_output():
-
-    pictures = Path.home() / "Pictures"
+class ConversionThread(QThread):
 
 
-    output = pictures / "Image2WEBP"
+    # ==========================
+    # SIGNALS
+    # ==========================
 
 
+    progress_changed = Signal(
+        int,
+        int,
+        int
+    )
 
-    output.mkdir(
 
-        parents=True,
+    file_processed = Signal(
+        str
+    )
 
-        exist_ok=True
 
+    conversion_finished = Signal(
+        dict
+    )
+
+
+    conversion_failed = Signal(
+        str
     )
 
 
 
-    return output
-</file>
-
-<file path="app/core/converter.py">
-from PIL import Image
 
 
-
-def convert_image(
-        source_path,
-        output_path,
-        mode="lossless",
-        quality=80
-):
-
-    try:
-
-        with Image.open(source_path) as image:
+    def __init__(
+            self,
+            images,
+            settings,
+            output_folder
+    ):
 
 
-            image = image.convert(
-                "RGBA"
+        super().__init__()
+
+
+
+        self.images = images
+
+        self.settings = settings
+
+        self.output_folder = output_folder
+
+
+
+        self.process_manager = None
+
+
+        self.cancelled = False
+
+
+
+
+
+    # ==========================
+    # THREAD EXECUTION
+    # ==========================
+
+
+    def run(self):
+
+
+        try:
+
+
+            # create inside worker thread
+
+            self.process_manager = ProcessPoolManager()
+
+
+
+            result = self.process_manager.process(
+
+                self.images,
+
+                self.settings,
+
+                self.output_folder,
+
+                on_file=self.handle_file,
+
+                on_progress=self.handle_progress
+
             )
 
 
-            if mode == "lossless":
 
-                image.save(
-                    output_path,
-                    "WEBP",
-                    lossless=True
-                )
+            result["cancelled"] = (
 
+                self.cancelled
 
-            elif mode == "lossy":
-
-                image.save(
-                    output_path,
-                    "WEBP",
-                    quality=quality,
-                    lossless=False
-                )
-
-
-            else:
-
-                raise ValueError(
-                    "Invalid conversion mode"
-                )
-
-
-        return True
+            )
 
 
 
-    except Exception as error:
+            self.conversion_finished.emit(
+
+                result
+
+            )
 
 
-        print(
-            f"Conversion failed: {error}"
+
+        except Exception as error:
+
+
+            self.conversion_failed.emit(
+
+                str(error)
+
+            )
+
+
+
+        finally:
+
+
+            self.process_manager = None
+
+
+
+
+
+    # ==========================
+    # CALLBACK
+    # ==========================
+
+
+    def handle_file(
+            self,
+            filename
+    ):
+
+
+        if self.cancelled:
+
+            return
+
+
+
+        self.file_processed.emit(
+
+            filename
+
         )
 
 
-        return False
+
+
+
+    def handle_progress(
+            self,
+            progress,
+            success,
+            failed
+    ):
+
+
+        if self.cancelled:
+
+            return
+
+
+
+        self.progress_changed.emit(
+
+            progress,
+
+            success,
+
+            failed
+
+        )
+
+
+
+
+
+    # ==========================
+    # CANCEL
+    # ==========================
+
+
+    def cancel(self):
+
+
+        self.cancelled = True
+
+
+
+        if self.process_manager:
+
+
+            self.process_manager.cancel()
+
+
+
+
+
+    def is_cancelled(self):
+
+
+        return self.cancelled
 </file>
 
-<file path="app/core/image_loader.py">
+<file path="app/core/image_scanner.py">
 from pathlib import Path
+
+from PySide6.QtCore import (
+    QThread,
+    Signal
+)
 
 
 from app.models.image_model import ImageModel
 
 
 
-SUPPORTED_FORMAT = [
-
+SUPPORTED_FORMAT = {
     ".jpg",
-
     ".jpeg",
-
     ".png"
-
-]
-
-
-
-def is_supported(file_path):
-
-    return (
-
-        Path(file_path)
-        .suffix
-        .lower()
-
-        in SUPPORTED_FORMAT
-
-    )
+}
 
 
 
-def load_files(files):
-
-    images = []
 
 
+class ImageScanner(QThread):
 
-    for file in files:
+
+    image_found = Signal(object)
 
 
-        if not is_supported(file):
+    scan_finished = Signal()
 
-            continue
 
+
+    def __init__(
+            self,
+            folder
+    ):
+
+        super().__init__()
+
+        self.folder = Path(folder)
+
+        self.cancelled = False
+
+
+
+
+    def run(self):
 
 
         try:
 
 
-            images.append(
+            for file in self.folder.rglob("*"):
 
-                ImageModel(file)
+
+                if self.cancelled:
+
+                    break
+
+
+
+                if (
+
+                    file.is_file()
+
+                    and
+
+                    file.suffix.lower()
+                    in SUPPORTED_FORMAT
+
+                ):
+
+
+                    image = ImageModel(
+                        file
+                    )
+
+
+                    self.image_found.emit(
+
+                        image
+
+                    )
+
+
+
+        finally:
+
+
+            self.scan_finished.emit()
+
+
+
+
+
+    def cancel(self):
+
+
+        self.cancelled = True
+</file>
+
+<file path="app/core/performance_config.py">
+import os
+import platform
+
+import psutil
+
+
+
+class PerformanceConfig:
+
+
+    def __init__(self):
+
+
+        # ==========================
+        # CPU INFORMATION
+        # ==========================
+
+        self.cpu_threads = (
+            os.cpu_count()
+            or 4
+        )
+
+
+        self.cpu_cores = (
+            psutil.cpu_count(
+                logical=False
+            )
+            or self.cpu_threads
+        )
+
+
+        # ==========================
+        # MEMORY INFORMATION
+        # ==========================
+
+        memory = psutil.virtual_memory()
+
+
+        self.total_ram_gb = (
+            memory.total
+            /
+            (1024 ** 3)
+        )
+
+
+        self.available_ram_gb = (
+            memory.available
+            /
+            (1024 ** 3)
+        )
+
+
+        self.available_ram_mb = (
+            self.available_ram_gb
+            *
+            1024
+        )
+
+
+        self.system = platform.system()
+
+
+
+    def calculate_workers(self):
+
+
+        cpu = self.cpu_threads
+
+
+        # =================================
+        # CPU FIRST STRATEGY
+        # =================================
+        #
+        # WEBP conversion:
+        # - image decode
+        # - encoding
+        # - compression
+        #
+        # scaling terbaik mengikuti logical CPU
+        #
+
+
+        workers = max(
+            2,
+            cpu - 1
+        )
+
+
+
+        # =================================
+        # RAM SAFETY BRAKE
+        # =================================
+        #
+        # RAM hanya membatasi jika benar-benar
+        # rendah.
+        #
+        # Normal:
+        # biarkan CPU bekerja penuh.
+        #
+
+
+        ram_mb = self.available_ram_mb
+
+
+
+        # RAM sangat kritis
+        # < 3GB tersedia
+
+        if ram_mb < 3072:
+
+
+            workers = min(
+                workers,
+                4
+            )
+
+
+
+        # RAM rendah
+        # 3-5GB tersedia
+
+        elif ram_mb < 5120:
+
+
+            workers = min(
+                workers,
+                cpu - 2
+            )
+
+
+
+        # RAM cukup
+        # jangan dibatasi
+
+
+
+        # =================================
+        # DEVICE SAFETY LIMIT
+        # =================================
+
+
+        workers = max(
+            2,
+            workers
+        )
+
+
+        workers = min(
+            workers,
+            32
+        )
+
+
+        return workers
+
+
+
+    def get_info(self):
+
+
+        return {
+
+
+            "system":
+                self.system,
+
+
+            "cpu_threads":
+                self.cpu_threads,
+
+
+            "cpu_cores":
+                self.cpu_cores,
+
+
+            "ram_gb":
+                round(
+                    self.total_ram_gb,
+                    2
+                ),
+
+
+            "available_ram_gb":
+                round(
+                    self.available_ram_gb,
+                    2
+                ),
+
+
+            "recommended_workers":
+                self.calculate_workers()
+
+        }
+</file>
+
+<file path="app/core/preview_loader.py">
+from PySide6.QtCore import (
+    QThread,
+    Signal
+)
+
+from PySide6.QtGui import QPixmap
+
+
+from app.core.thumbnail_cache import ThumbnailCache
+
+
+
+
+class PreviewLoader(QThread):
+
+
+    preview_ready = Signal(QPixmap)
+
+
+
+    def __init__(
+            self,
+            image,
+            cache
+    ):
+
+        super().__init__()
+
+
+        self.image = image
+
+        self.cache = cache
+
+
+
+    def run(self):
+
+
+        preview_path = (
+            self.cache.create_preview(
+                self.image.path
+            )
+        )
+
+
+        if preview_path is None:
+
+            self.preview_ready.emit(
+                QPixmap()
+            )
+
+            return
+
+
+
+        pixmap = QPixmap(
+            str(preview_path)
+        )
+
+
+        self.preview_ready.emit(
+
+            pixmap
+
+        )
+</file>
+
+<file path="app/core/thumbnail_loader.py">
+from PySide6.QtCore import (
+    QThread,
+    Signal
+)
+
+
+from app.core.thumbnail_cache import ThumbnailCache
+
+
+
+
+
+class ThumbnailLoader(QThread):
+
+
+    thumbnail_ready = Signal(
+        object,
+        object
+    )
+
+
+
+    def __init__(
+            self,
+            image,
+            cache
+    ):
+
+
+        super().__init__()
+
+
+        self.image = image
+
+
+        self.cache = cache
+
+
+
+
+
+    def run(self):
+
+
+        try:
+
+
+            pixmap = self.cache.get_pixmap(
+
+                self.image.path
+
+            )
+
+
+
+            self.thumbnail_ready.emit(
+
+                self.image,
+
+                pixmap
 
             )
 
@@ -241,243 +1190,160 @@ def load_files(files):
 
 
             print(
-                f"Failed loading image {file}: {error}"
-            )
 
-
-
-    return images
-
-
-
-def load_folder(folder):
-
-    folder_path = Path(folder)
-
-
-    files = []
-
-
-
-    for file in folder_path.rglob("*"):
-
-
-        if (
-
-            file.is_file()
-
-            and is_supported(file)
-
-        ):
-
-            files.append(
-
-                str(file)
+                f"Thumbnail loader error: {error}"
 
             )
-
-
-
-    return load_files(files)
 </file>
 
-<file path="app/core/process_manager.py">
-from app.core.converter import convert_image
+<file path="app/core/webp_profile.py">
+WEBP_PROFILES = {
 
 
-from app.utils.file_utils import (
-    create_output_path
-)
+    "fast": {
+
+        "method": 2,
+
+        "name": "Fast Conversion",
+
+        "description":
+            "Prioritize conversion speed"
+
+    },
+
+
+    "balanced": {
+
+        "method": 4,
+
+        "name": "Standard Quality",
+
+        "description":
+            "Balance between speed and compression"
+
+    },
+
+
+    "compression": {
+
+        "method": 6,
+
+        "name": "Maximum Compression",
+
+        "description":
+            "Smallest file size with slower conversion"
+
+    }
+
+}
 
 
 
-class ProcessManager:
 
 
-    def __init__(self):
-
-        self.success = 0
-
-        self.failed = 0
-
-        self.cancelled = False
+DEFAULT_PROFILE = "fast"
 
 
 
-    def cancel(self):
-
-        self.cancelled = True
 
 
+def get_webp_method(profile=None):
 
-    def process(
-            self,
-            images,
-            settings,
-            output_folder,
-            on_file=None,
-            on_progress=None
+
+    """
+    Return WEBP encoder method.
+
+    Method:
+        2 = Fast
+        4 = Balanced
+        6 = Maximum Compression
+    """
+
+
+
+    if not isinstance(
+            profile,
+            str
     ):
 
-        self.success = 0
 
-        self.failed = 0
+        profile = DEFAULT_PROFILE
 
-        self.cancelled = False
 
 
+    if profile not in WEBP_PROFILES:
 
-        total = len(images)
 
+        profile = DEFAULT_PROFILE
 
 
-        if total == 0:
 
-            return {
+    return WEBP_PROFILES[profile]["method"]
 
-                "success": 0,
 
-                "failed": 0,
 
-                "cancelled": False
 
-            }
 
+def get_profile_info(profile=None):
 
 
-        for index, image in enumerate(images, start=1):
+    """
+    Return profile metadata.
+    """
 
 
-            if self.cancelled:
+    if not isinstance(
+            profile,
+            str
+    ):
 
-                break
 
+        profile = DEFAULT_PROFILE
 
 
-            if on_file:
 
-                on_file(
-                    image.filename
-                )
+    return WEBP_PROFILES.get(
 
+        profile,
 
+        WEBP_PROFILES[DEFAULT_PROFILE]
 
-            try:
+    )
 
 
-                output_path = create_output_path(
 
-                    image.path,
 
-                    output_folder
 
-                )
+def get_available_profiles():
 
 
+    """
+    Used by UI.
+    """
 
-                result = convert_image(
 
-                    image.path,
-
-                    output_path,
-
-                    mode=settings["mode"],
-
-                    quality=settings["quality"]
-
-                )
-
-
-
-                if result:
-
-                    self.success += 1
-
-
-                else:
-
-                    self.failed += 1
-
-
-
-            except Exception as error:
-
-
-                print(
-                    f"Processing failed: {error}"
-                )
-
-
-                self.failed += 1
-
-
-
-            progress = int(
-
-                (index / total) * 100
-
-            )
-
-
-
-            if on_progress:
-
-                on_progress(
-
-                    progress,
-
-                    self.success,
-
-                    self.failed
-
-                )
-
-
-
-        return {
-
-            "success": self.success,
-
-            "failed": self.failed,
-
-            "cancelled": self.cancelled
-
-        }
+    return WEBP_PROFILES
 </file>
 
 <file path="app/models/__init__.py">
 
 </file>
 
-<file path="app/models/image_model.py">
-from pathlib import Path
+<file path="app/models/process_result.py">
+from typing import NamedTuple
 
 
 
-class ImageModel:
+class ProcessResult(NamedTuple):
 
 
-    def __init__(self, path):
-
-        self.path = Path(path)
+    success: bool
 
 
-        self.filename = self.path.name
+    file: str
 
 
-        self.extension = (
-
-            self.path.suffix
-
-            .lower()
-
-        )
-
-
-
-    def get_size(self):
-
-        return self.path.stat().st_size
+    output: str
 </file>
 
 <file path="app/utils/__init__.py">
@@ -519,714 +1385,6 @@ def create_output_path(
 
 <file path="app/views/__init__.py">
 
-</file>
-
-<file path="app/views/convert_page.py">
-from pathlib import Path
-
-
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QPushButton,
-    QFileDialog,
-    QMessageBox,
-    QScrollArea
-)
-
-
-from app.widgets.drop_area import DropArea
-from app.widgets.image_list import ImageList
-from app.widgets.image_preview import ImagePreview
-from app.widgets.settings_panel import SettingsPanel
-from app.widgets.output_panel import OutputPanel
-from app.widgets.process_status import ProcessStatus
-
-
-from app.core.image_loader import (
-    load_files,
-    load_folder
-)
-
-
-from app.core.process_manager import ProcessManager
-
-
-
-class ConvertPage(QWidget):
-
-
-    def __init__(self):
-
-        super().__init__()
-
-
-        self.images = []
-
-        self.selected_image = None
-
-
-        self.settings_panel = SettingsPanel()
-
-        self.output_panel = OutputPanel()
-
-        self.process_status = ProcessStatus()
-
-        self.process_manager = ProcessManager()
-
-
-        self.init_ui()
-
-
-
-    def init_ui(self):
-
-        main_layout = QVBoxLayout()
-
-
-
-        self.scroll_area = QScrollArea()
-
-        self.scroll_area.setWidgetResizable(
-            True
-        )
-
-
-        self.content_widget = QWidget()
-
-
-        layout = QVBoxLayout(
-            self.content_widget
-        )
-
-
-
-        self.drop_area = DropArea()
-
-
-        self.drop_area.files_dropped.connect(
-            self.handle_drop
-        )
-
-
-
-        add_single = QPushButton(
-            "Add Image"
-        )
-
-
-        add_multiple = QPushButton(
-            "Add Multiple Images"
-        )
-
-
-        add_folder = QPushButton(
-            "Add Folder"
-        )
-
-
-        remove_button = QPushButton(
-            "Remove Selected"
-        )
-
-
-        delete_all_button = QPushButton(
-            "Delete All"
-        )
-
-
-        self.convert_selected_button = QPushButton(
-            "Convert Selected"
-        )
-
-
-        self.convert_all_button = QPushButton(
-            "Convert All"
-        )
-
-
-
-        self.image_list = ImageList()
-
-        self.preview = ImagePreview()
-
-
-
-        self.image_list.image_selected.connect(
-            self.handle_image_selected
-        )
-
-
-        self.image_list.image_selected.connect(
-            self.preview.show_image
-        )
-
-
-
-        add_single.clicked.connect(
-            self.add_single_image
-        )
-
-
-        add_multiple.clicked.connect(
-            self.add_multiple_images
-        )
-
-
-        add_folder.clicked.connect(
-            self.add_folder
-        )
-
-
-        remove_button.clicked.connect(
-            self.remove_selected
-        )
-
-
-        delete_all_button.clicked.connect(
-            self.delete_all
-        )
-
-
-        self.convert_selected_button.clicked.connect(
-            self.convert_selected
-        )
-
-
-        self.convert_all_button.clicked.connect(
-            self.convert_all
-        )
-
-
-
-        self.process_status.open_folder_clicked.connect(
-            self.open_output_folder
-        )
-
-
-        self.process_status.cancel_clicked.connect(
-            self.cancel_processing
-        )
-
-
-
-        widgets = [
-
-            self.drop_area,
-
-            add_single,
-
-            add_multiple,
-
-            add_folder,
-
-            self.image_list,
-
-            remove_button,
-
-            delete_all_button,
-
-            self.preview,
-
-            self.settings_panel,
-
-            self.output_panel,
-
-            self.process_status,
-
-            self.convert_selected_button,
-
-            self.convert_all_button
-
-        ]
-
-
-
-        for widget in widgets:
-
-            layout.addWidget(
-                widget
-            )
-
-
-
-        self.scroll_area.setWidget(
-            self.content_widget
-        )
-
-
-        main_layout.addWidget(
-            self.scroll_area
-        )
-
-
-        self.setLayout(
-            main_layout
-        )
-
-    # =========================
-    # IMAGE SELECTION
-    # =========================
-
-
-    def handle_image_selected(self, image):
-
-        self.selected_image = image
-
-
-
-    # =========================
-    # IMAGE INPUT
-    # =========================
-
-
-    def add_single_image(self):
-
-        file, _ = QFileDialog.getOpenFileName(
-
-            self,
-
-            "Select Image",
-
-            "",
-
-            "Images (*.jpg *.jpeg *.png)"
-
-        )
-
-
-        if file:
-
-            self.add_images(
-                [file]
-            )
-
-
-
-    def add_multiple_images(self):
-
-        files, _ = QFileDialog.getOpenFileNames(
-
-            self,
-
-            "Select Images",
-
-            "",
-
-            "Images (*.jpg *.jpeg *.png)"
-
-        )
-
-
-        if files:
-
-            self.add_images(
-                files
-            )
-
-
-
-    def add_folder(self):
-
-        folder = QFileDialog.getExistingDirectory(
-
-            self,
-
-            "Select Folder"
-
-        )
-
-
-        if folder:
-
-            self.images.extend(
-
-                load_folder(folder)
-
-            )
-
-
-            self.refresh()
-
-
-
-    def handle_drop(self, paths):
-
-        for path in paths:
-
-            self.add_path(path)
-
-
-
-    def add_path(self, path):
-
-        if Path(path).is_dir():
-
-            self.images.extend(
-
-                load_folder(path)
-
-            )
-
-
-        else:
-
-            self.images.extend(
-
-                load_files(
-                    [path]
-                )
-
-            )
-
-
-        self.refresh()
-
-
-
-    def add_images(self, files):
-
-        self.images.extend(
-
-            load_files(files)
-
-        )
-
-
-        self.refresh()
-
-
-
-    def refresh(self):
-
-        self.image_list.clear()
-
-
-        self.image_list.add_images(
-
-            self.images
-
-        )
-
-
-
-    # =========================
-    # IMAGE MANAGEMENT
-    # =========================
-
-
-    def remove_selected(self):
-
-        if self.selected_image is None:
-
-            return
-
-
-
-        if self.selected_image in self.images:
-
-            self.images.remove(
-
-                self.selected_image
-
-            )
-
-
-
-        self.selected_image = None
-
-
-        self.preview.show_empty()
-
-
-        self.refresh()
-
-
-
-    def delete_all(self):
-
-        self.images.clear()
-
-
-        self.selected_image = None
-
-
-        self.image_list.clear()
-
-
-        self.preview.show_empty()
-
-
-        self.process_status.reset()
-
-
-
-    # =========================
-    # CONVERSION
-    # =========================
-
-
-    def convert_selected(self):
-
-        if self.selected_image is None:
-
-
-            QMessageBox.warning(
-
-                self,
-
-                "No Image",
-
-                "Please select an image first."
-
-            )
-
-
-            return
-
-
-
-        self.convert_process(
-
-            [
-                self.selected_image
-            ]
-
-        )
-
-
-
-    def convert_all(self):
-
-        if not self.images:
-
-
-            QMessageBox.warning(
-
-                self,
-
-                "No Image",
-
-                "No images available."
-
-            )
-
-
-            return
-
-
-
-        self.convert_process(
-
-            self.images
-
-        )
-
-
-
-    def convert_process(self, images):
-
-        try:
-
-            self.set_processing_state()
-
-
-            self.process_status.reset()
-
-
-            self.process_status.set_processing()
-
-
-
-            settings = self.settings_panel.get_settings()
-
-
-
-            output_folder = (
-                self.output_panel.get_output_folder()
-            )
-
-
-
-            result = self.process_manager.process(
-
-                images,
-
-                settings,
-
-                output_folder,
-
-                on_file=self.update_processing_file,
-
-                on_progress=self.update_processing_progress
-
-            )
-
-
-
-            self.set_finished_state()
-
-
-
-            if result["cancelled"]:
-
-
-                self.process_status.set_cancelled()
-
-
-
-                QMessageBox.information(
-
-                    self,
-
-                    "Conversion Cancelled",
-
-                    f"Process cancelled.\n\n"
-                    f"Success: {result['success']}\n"
-                    f"Failed: {result['failed']}"
-
-                )
-
-
-            else:
-
-
-                self.process_status.set_completed()
-
-
-
-                QMessageBox.information(
-
-                    self,
-
-                    "Conversion Complete",
-
-                    f"Success: {result['success']}\n"
-                    f"Failed: {result['failed']}"
-
-                )
-
-
-
-        except Exception as error:
-
-
-            self.set_finished_state()
-
-
-            self.process_status.set_idle()
-
-
-
-            QMessageBox.critical(
-
-                self,
-
-                "Conversion Failed",
-
-                str(error)
-
-            )
-
-
-
-    # =========================
-    # PROCESS STATUS
-    # =========================
-
-
-    def update_processing_file(self, filename):
-
-        self.process_status.update_file(
-
-            filename
-
-        )
-
-
-
-    def update_processing_progress(
-            self,
-            progress,
-            success,
-            failed
-    ):
-
-
-        self.process_status.update_progress(
-
-            progress
-
-        )
-
-
-        self.process_status.update_result(
-
-            success,
-
-            failed
-
-        )
-
-
-
-    def set_processing_state(self):
-
-        self.convert_selected_button.setEnabled(
-
-            False
-
-        )
-
-
-        self.convert_all_button.setEnabled(
-
-            False
-
-        )
-
-
-
-    def set_finished_state(self):
-
-        self.convert_selected_button.setEnabled(
-
-            True
-
-        )
-
-
-        self.convert_all_button.setEnabled(
-
-            True
-
-        )
-
-
-
-    def cancel_processing(self):
-
-        self.process_manager.cancel()
-
-
-
-    # =========================
-    # OUTPUT FOLDER
-    # =========================
-
-
-    def open_output_folder(self):
-
-        import os
-
-
-        folder = self.output_panel.get_output_folder()
-
-
-
-        if os.path.exists(folder):
-
-            os.startfile(folder)
 </file>
 
 <file path="app/views/home_page.py">
@@ -1398,6 +1556,818 @@ class MainWindow(QMainWindow):
 
 </file>
 
+<file path="app/widgets/conversion_info.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QGroupBox
+)
+
+
+from PySide6.QtCore import Qt
+
+
+
+
+
+class ConversionInfo(QWidget):
+
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.init_ui()
+
+
+
+
+
+    def init_ui(self):
+
+
+        layout = QVBoxLayout()
+
+
+
+        info_box = QGroupBox(
+            "Conversion Guide"
+        )
+
+
+        info_layout = QVBoxLayout()
+
+
+
+        self.info_label = QLabel(
+            """
+<b>Compression Mode</b>
+
+<br>
+
+<b>Lossless Mode</b><br>
+• Tidak mengurangi kualitas gambar.<br>
+• Semua detail gambar dipertahankan.<br>
+• Quality slider tidak digunakan.<br>
+• Ukuran file biasanya lebih besar.<br>
+
+<br>
+
+<b>Lossy Mode</b><br>
+• Menggunakan pengaturan Quality.<br>
+• Quality tinggi (mendekati 100):
+kualitas lebih baik, ukuran file lebih besar.<br>
+• Quality rendah:
+ukuran file lebih kecil, kualitas lebih berkurang.<br>
+
+<br>
+
+<b>Performance Profile</b>
+
+<br>
+
+<b>Fast Conversion (Method 2)</b><br>
+• Prioritas kecepatan proses.<br>
+• Cocok untuk konversi banyak gambar.<br>
+• Ukuran file dapat sedikit lebih besar.<br>
+
+<br>
+
+<b>Standard Quality (Method 4)</b><br>
+• Keseimbangan antara kecepatan dan ukuran file.<br>
+• Pilihan terbaik untuk penggunaan umum.<br>
+
+<br>
+
+<b>Maximum Compression (Method 6)</b><br>
+• Optimasi ukuran file lebih maksimal.<br>
+• Membutuhkan waktu proses lebih lama.<br>
+
+<br>
+
+<b>Note:</b><br>
+Performance Profile berlaku untuk proses encoding WEBP baik Lossy maupun Lossless.
+            """
+        )
+
+
+
+        self.info_label.setWordWrap(
+            True
+        )
+
+
+        self.info_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse
+        )
+
+
+
+        info_layout.addWidget(
+            self.info_label
+        )
+
+
+
+        info_box.setLayout(
+            info_layout
+        )
+
+
+
+        layout.addWidget(
+            info_box
+        )
+
+
+        self.setLayout(
+            layout
+        )
+</file>
+
+<file path="app/widgets/conversion_panel.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout
+)
+
+
+from PySide6.QtCore import Signal
+
+
+
+from app.widgets.settings_panel import (
+    SettingsPanel
+)
+
+
+from app.widgets.conversion_info import (
+    ConversionInfo
+)
+
+
+from app.widgets.output_panel import (
+    OutputPanel
+)
+
+
+from app.widgets.conversion_stats import (
+    ConversionStats
+)
+
+
+from app.widgets.performance_monitor import (
+    PerformanceMonitor
+)
+
+
+
+
+
+class ConversionPanel(QWidget):
+
+
+    settings_changed = Signal(dict)
+
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+        self.init_components()
+
+        self.init_ui()
+
+        self.connect_signals()
+
+
+
+
+
+    # ==================================
+    # COMPONENTS
+    # ==================================
+
+
+    def init_components(self):
+
+
+        self.settings_panel = SettingsPanel()
+
+
+
+        self.conversion_info = ConversionInfo()
+
+
+
+        self.output_panel = OutputPanel()
+
+
+
+        # NEW
+
+        self.conversion_stats = ConversionStats()
+
+
+
+        self.performance_monitor = PerformanceMonitor()
+
+
+
+
+
+    # ==================================
+    # UI
+    # ==================================
+
+
+    def init_ui(self):
+
+
+        layout = QVBoxLayout()
+
+
+
+        layout.addWidget(
+
+            self.settings_panel
+
+        )
+
+
+
+        layout.addWidget(
+
+            self.conversion_info
+
+        )
+
+
+
+        layout.addWidget(
+
+            self.output_panel
+
+        )
+
+
+
+        # STATISTICS
+
+        layout.addWidget(
+
+            self.conversion_stats
+
+        )
+
+
+
+        # PERFORMANCE
+
+        layout.addWidget(
+
+            self.performance_monitor
+
+        )
+
+
+
+        self.setLayout(
+
+            layout
+
+        )
+
+
+
+
+
+    # ==================================
+    # SIGNALS
+    # ==================================
+
+
+    def connect_signals(self):
+
+
+        self.settings_panel.settings_changed.connect(
+
+            self.settings_changed.emit
+
+        )
+
+
+
+
+
+    # ==================================
+    # SETTINGS API
+    # ==================================
+
+
+    def get_settings(self):
+
+
+        return (
+
+            self.settings_panel.get_settings()
+
+        )
+
+
+
+
+
+    # ==================================
+    # OUTPUT API
+    # ==================================
+
+
+    def get_output_folder(self):
+
+
+        return (
+
+            self.output_panel.get_output_folder()
+
+        )
+
+
+
+
+
+    # ==================================
+    # PERFORMANCE API
+    # ==================================
+
+
+    def set_profile(
+            self,
+            profile
+    ):
+
+
+        self.performance_monitor.set_profile(
+
+            profile
+
+        )
+
+
+
+
+
+    def set_workers(
+            self,
+            workers
+    ):
+
+
+        self.performance_monitor.set_worker_info(
+
+            workers
+
+        )
+
+
+
+
+
+    # ==================================
+    # STATISTICS API
+    # ==================================
+
+
+    def update_statistics(
+            self,
+            data
+    ):
+
+
+        self.conversion_stats.update_stats(
+
+            data
+
+        )
+
+
+
+
+
+    # ==================================
+    # RESET
+    # ==================================
+
+
+    def reset(self):
+
+
+        self.output_panel.reset()
+
+
+
+        self.conversion_stats.update_stats({
+
+            "total": 0,
+
+            "success": 0,
+
+            "failed": 0,
+
+            "duration": 0,
+
+            "speed": 0,
+
+            "input_mb": 0,
+
+            "output_mb": 0,
+
+            "saved_percent": 0
+
+        })
+</file>
+
+<file path="app/widgets/conversion_stats.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QGroupBox
+)
+
+
+
+class ConversionStats(QWidget):
+
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.init_ui()
+
+
+
+    def init_ui(self):
+
+        layout = QVBoxLayout()
+
+
+        box = QGroupBox(
+            "Conversion Statistics"
+        )
+
+
+        box_layout = QVBoxLayout()
+
+
+        self.total_label = QLabel(
+            "Total Files: 0"
+        )
+
+
+        self.success_label = QLabel(
+            "Success: 0"
+        )
+
+
+        self.failed_label = QLabel(
+            "Failed: 0"
+        )
+
+
+        self.duration_label = QLabel(
+            "Duration: 0 s"
+        )
+
+
+        self.speed_label = QLabel(
+            "Speed: 0 img/s"
+        )
+
+
+        self.input_size_label = QLabel(
+            "Input Size: 0 MB"
+        )
+
+
+        self.output_size_label = QLabel(
+            "Output Size: 0 MB"
+        )
+
+
+        self.saved_label = QLabel(
+            "Saved: 0%"
+        )
+
+
+
+        widgets = [
+
+            self.total_label,
+
+            self.success_label,
+
+            self.failed_label,
+
+            self.duration_label,
+
+            self.speed_label,
+
+            self.input_size_label,
+
+            self.output_size_label,
+
+            self.saved_label
+
+        ]
+
+
+        for widget in widgets:
+
+            box_layout.addWidget(
+                widget
+            )
+
+
+        box.setLayout(
+            box_layout
+        )
+
+
+        layout.addWidget(
+            box
+        )
+
+
+        self.setLayout(
+            layout
+        )
+
+
+
+    def update_stats(
+            self,
+            data
+    ):
+
+
+        self.total_label.setText(
+            f"Total Files: {data['total']}"
+        )
+
+
+        self.success_label.setText(
+            f"Success: {data['success']}"
+        )
+
+
+        self.failed_label.setText(
+            f"Failed: {data['failed']}"
+        )
+
+
+        self.duration_label.setText(
+            f"Duration: {data['duration']:.2f}s"
+        )
+
+
+        self.speed_label.setText(
+            f"Speed: {data['speed']:.2f} img/s"
+        )
+
+
+        self.input_size_label.setText(
+            f"Input Size: {data['input_mb']:.2f} MB"
+        )
+
+
+        self.output_size_label.setText(
+            f"Output Size: {data['output_mb']:.2f} MB"
+        )
+
+
+        self.saved_label.setText(
+            f"Saved: {data['saved_percent']:.2f}%"
+        )
+</file>
+
+<file path="app/widgets/convert_toolbar.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QHBoxLayout,
+    QPushButton
+)
+
+
+from PySide6.QtCore import Signal
+
+
+
+
+
+class ConvertToolbar(QWidget):
+
+
+    # ==========================
+    # SIGNALS
+    # ==========================
+
+    add_image_clicked = Signal()
+
+    add_multiple_clicked = Signal()
+
+    add_folder_clicked = Signal()
+
+    remove_selected_clicked = Signal()
+
+    delete_all_clicked = Signal()
+
+    convert_selected_clicked = Signal()
+
+    convert_all_clicked = Signal()
+
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+        self.init_ui()
+
+
+
+
+
+    def init_ui(self):
+
+
+        layout = QHBoxLayout()
+
+
+
+        # ==========================
+        # BUTTONS
+        # ==========================
+
+
+        self.add_image_button = QPushButton(
+            "Add Image"
+        )
+
+
+        self.add_multiple_button = QPushButton(
+            "Add Multiple Images"
+        )
+
+
+        self.add_folder_button = QPushButton(
+            "Add Folder"
+        )
+
+
+        self.remove_button = QPushButton(
+            "Remove Selected"
+        )
+
+
+        self.delete_all_button = QPushButton(
+            "Delete All"
+        )
+
+
+        self.convert_selected_button = QPushButton(
+            "Convert Selected"
+        )
+
+
+        self.convert_all_button = QPushButton(
+            "Convert All"
+        )
+
+
+
+        # ==========================
+        # CONNECT SIGNAL
+        # ==========================
+
+
+        self.add_image_button.clicked.connect(
+
+            self.add_image_clicked.emit
+
+        )
+
+
+        self.add_multiple_button.clicked.connect(
+
+            self.add_multiple_clicked.emit
+
+        )
+
+
+        self.add_folder_button.clicked.connect(
+
+            self.add_folder_clicked.emit
+
+        )
+
+
+        self.remove_button.clicked.connect(
+
+            self.remove_selected_clicked.emit
+
+        )
+
+
+        self.delete_all_button.clicked.connect(
+
+            self.delete_all_clicked.emit
+
+        )
+
+
+        self.convert_selected_button.clicked.connect(
+
+            self.convert_selected_clicked.emit
+
+        )
+
+
+        self.convert_all_button.clicked.connect(
+
+            self.convert_all_clicked.emit
+
+        )
+
+
+
+        # ==========================
+        # ADD TO LAYOUT
+        # ==========================
+
+
+        buttons = [
+
+            self.add_image_button,
+
+            self.add_multiple_button,
+
+            self.add_folder_button,
+
+            self.remove_button,
+
+            self.delete_all_button,
+
+            self.convert_selected_button,
+
+            self.convert_all_button
+
+        ]
+
+
+
+        for button in buttons:
+
+            layout.addWidget(
+                button
+            )
+
+
+
+        self.setLayout(
+            layout
+        )
+
+
+
+
+
+    # ==========================
+    # STATE CONTROL
+    # ==========================
+
+
+    def set_processing(
+            self,
+            state=True
+    ):
+
+
+        self.convert_selected_button.setEnabled(
+            not state
+        )
+
+
+        self.convert_all_button.setEnabled(
+            not state
+        )
+</file>
+
 <file path="app/widgets/drop_area.py">
 from PySide6.QtWidgets import QLabel
 
@@ -1469,27 +2439,40 @@ class DropArea(QLabel):
         event.acceptProposedAction()
 </file>
 
-<file path="app/widgets/image_list.py">
+<file path="app/widgets/image_manager.py">
+from pathlib import Path
+
+
 from PySide6.QtWidgets import (
-    QListWidget,
-    QListWidgetItem
+    QWidget,
+    QVBoxLayout
 )
 
 
-from PySide6.QtGui import (
-    QIcon,
-    QPixmap
+from PySide6.QtCore import Signal
+
+
+
+from app.widgets.image_list import ImageList
+
+from app.widgets.image_preview import ImagePreview
+
+
+
+from app.core.image_loader import (
+    load_files
 )
 
 
-from PySide6.QtCore import (
-    QSize,
-    Signal
+from app.core.image_scanner import (
+    ImageScanner
 )
 
 
 
-class ImageList(QListWidget):
+
+
+class ImageManager(QWidget):
 
 
     image_selected = Signal(object)
@@ -1501,233 +2484,350 @@ class ImageList(QListWidget):
         super().__init__()
 
 
-        self.current_selected_item = None
+        self.images = []
+
+
+        self.selected_image = None
+
+
+        self.scanner = None
 
 
 
-        self.setIconSize(
-            QSize(70, 70)
+        self.init_ui()
+
+
+
+
+
+    # ==========================
+    # UI
+    # ==========================
+
+
+    def init_ui(self):
+
+
+        layout = QVBoxLayout()
+
+
+
+        self.image_list = ImageList()
+
+
+        self.preview = ImagePreview()
+
+
+
+        self.image_list.image_selected.connect(
+
+            self.handle_selected
+
         )
 
 
-        self.itemClicked.connect(
-            self.handle_click
+
+        self.image_list.image_selected.connect(
+
+            self.preview.show_image
+
         )
 
 
 
-    def add_images(self, images):
+        layout.addWidget(
 
-        for image in images:
+            self.image_list
 
-
-            item = QListWidgetItem()
-
+        )
 
 
-            pixmap = QPixmap(
-                str(image.path)
-            )
+        layout.addWidget(
+
+            self.preview
+
+        )
 
 
-            if not pixmap.isNull():
+        self.setLayout(
 
-                pixmap = pixmap.scaled(
-                    70,
-                    70
-                )
+            layout
 
-
-                item.setIcon(
-                    QIcon(pixmap)
-                )
+        )
 
 
 
-            item.setText(
-
-                f"{image.filename} | "
-                f"{image.extension.replace('.', '').upper()} | "
-                f"{self.format_size(image.get_size())}"
-
-            )
 
 
-            item.setData(
-                100,
+    # ==========================
+    # SELECTION
+    # ==========================
+
+
+    def handle_selected(
+            self,
+            image
+    ):
+
+
+        self.selected_image = image
+
+
+        self.image_selected.emit(
+
+            image
+
+        )
+
+
+
+
+
+    def get_selected(self):
+
+
+        return self.selected_image
+
+
+
+
+
+    # ==========================
+    # ADD FILES
+    # ==========================
+
+
+    def add_images(
+            self,
+            files
+    ):
+
+
+        images = load_files(
+            files
+        )
+
+
+        self.images.extend(
+
+            images
+
+        )
+
+
+        self.image_list.add_images(
+
+            images
+
+        )
+
+
+
+
+
+    # ==========================
+    # FOLDER SCAN
+    # ==========================
+
+
+    def add_folder(
+            self,
+            folder
+    ):
+
+
+        # stop scanner lama
+
+        if self.scanner:
+
+
+            self.scanner.cancel()
+
+
+
+        self.scanner = ImageScanner(
+
+            folder
+
+        )
+
+
+
+        self.scanner.image_found.connect(
+
+            self.add_scanned_image
+
+        )
+
+
+
+        self.scanner.start()
+
+
+
+
+
+    def add_scanned_image(
+            self,
+            image
+    ):
+
+
+        self.images.append(
+
+            image
+
+        )
+
+
+        self.image_list.add_images(
+
+            [
                 image
+            ]
+
+        )
+
+
+
+
+
+    def add_path(
+            self,
+            path
+    ):
+
+
+        if Path(path).is_dir():
+
+
+            self.add_folder(
+
+                path
+
             )
 
 
-            self.addItem(
-                item
+        else:
+
+
+            self.add_images(
+
+                [
+                    path
+                ]
+
             )
 
 
 
-    def handle_click(self, item):
 
 
-        if self.current_selected_item == item:
+    def add_paths(
+            self,
+            paths
+    ):
 
 
-            self.clearSelection()
+        for path in paths:
 
 
-            self.current_selected_item = None
+            self.add_path(
 
+                path
 
-            self.image_selected.emit(
-                None
             )
 
+
+
+
+
+    # ==========================
+    # MANAGEMENT
+    # ==========================
+
+
+    def remove_selected(self):
+
+
+        if self.selected_image is None:
 
             return
 
 
 
-        self.current_selected_item = item
+        if self.selected_image in self.images:
 
 
-        image = item.data(100)
+            self.images.remove(
 
+                self.selected_image
 
-        self.image_selected.emit(
-            image
-        )
-
-
-
-    def remove_selected(self):
-
-        selected = self.currentItem()
-
-
-        if selected:
-
-
-            row = self.row(selected)
-
-
-            self.takeItem(
-                row
             )
 
 
-            self.current_selected_item = None
+
+        self.selected_image = None
+
+
+        self.preview.show_empty()
+
+
+        self.refresh()
+
+
 
 
 
     def clear(self):
 
-        super().clear()
+
+        if self.scanner:
 
 
-        self.current_selected_item = None
-
-
-
-    def format_size(self, size):
-
-        kb = size / 1024
-
-
-        mb = kb / 1024
+            self.scanner.cancel()
 
 
 
-        if mb >= 1:
-
-            return f"{mb:.2f} MB"
+        self.images.clear()
 
 
-
-        return f"{kb:.2f} KB"
-</file>
-
-<file path="app/widgets/image_preview.py">
-from PySide6.QtWidgets import QLabel
+        self.selected_image = None
 
 
-from PySide6.QtGui import QPixmap
+        self.image_list.clear()
 
 
-from PySide6.QtCore import Qt
+        self.preview.show_empty()
 
 
 
-class ImagePreview(QLabel):
 
 
-    def __init__(self):
-
-        super().__init__()
+    def get_images(self):
 
 
-        self.setAlignment(
-            Qt.AlignCenter
-        )
-
-
-        self.setMinimumHeight(
-            300
-        )
-
-
-        self.show_empty()
+        return self.images
 
 
 
-    def show_image(self, image):
-
-        if image is None:
-
-            self.show_empty()
-
-            return
 
 
-
-        pixmap = QPixmap(
-            str(image.path)
-        )
-
+    # ==========================
+    # REFRESH
+    # ==========================
 
 
-        if pixmap.isNull():
-
-            self.show_empty()
-
-            return
+    def refresh(self):
 
 
-
-        pixmap = pixmap.scaled(
-
-            400,
-
-            400,
-
-            Qt.KeepAspectRatio,
-
-            Qt.SmoothTransformation
-
-        )
+        self.image_list.clear()
 
 
-        self.setPixmap(
-            pixmap
-        )
+        self.image_list.add_images(
 
+            self.images
 
-
-    def show_empty(self):
-
-        self.clear()
-
-
-        self.setText(
-            "Image Preview"
         )
 </file>
 
@@ -1873,27 +2973,25 @@ class OutputPanel(QWidget):
         )
 </file>
 
-<file path="app/widgets/process_status.py">
+<file path="app/widgets/performance_monitor.py">
+import psutil
+
+
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLabel,
-    QProgressBar,
-    QPushButton
+    QGroupBox
 )
 
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer
 
 
 
-class ProcessStatus(QWidget):
 
 
-    open_folder_clicked = Signal()
-
-    cancel_clicked = Signal()
-
+class PerformanceMonitor(QWidget):
 
 
     def __init__(self):
@@ -1904,99 +3002,81 @@ class ProcessStatus(QWidget):
         self.init_ui()
 
 
+        self.timer = QTimer()
+
+
+        self.timer.timeout.connect(
+            self.update_monitor
+        )
+
+
+        self.timer.start(
+            1000
+        )
+
+
 
     def init_ui(self):
+
 
         layout = QVBoxLayout()
 
 
-
-        self.title_label = QLabel(
-            "Processing Status: Idle"
+        box = QGroupBox(
+            "System Monitor"
         )
 
 
-        self.current_file_label = QLabel(
-            "Current File: -"
+        box_layout = QVBoxLayout()
+
+
+
+        self.cpu_label = QLabel(
+            "CPU: 0%"
         )
 
 
-        self.progress_bar = QProgressBar()
-
-
-        self.progress_bar.setValue(
-            0
+        self.ram_label = QLabel(
+            "RAM: 0%"
         )
 
 
-        self.success_label = QLabel(
-            "Success: 0"
+        self.process_label = QLabel(
+            "Workers: -"
         )
 
 
-        self.failed_label = QLabel(
-            "Failed: 0"
-        )
-
-
-
-        self.open_folder_button = QPushButton(
-            "Open Folder"
-        )
-
-
-        self.open_folder_button.setEnabled(
-            False
+        self.webp_label = QLabel(
+            "WEBP Profile: -"
         )
 
 
 
-        self.cancel_button = QPushButton(
-            "Cancel"
-        )
+        for widget in [
 
+            self.cpu_label,
 
-        self.cancel_button.hide()
+            self.ram_label,
 
+            self.process_label,
 
+            self.webp_label
 
-        self.open_folder_button.clicked.connect(
-            self.open_folder_clicked.emit
-        )
+        ]:
 
-
-        self.cancel_button.clicked.connect(
-            self.cancel_clicked.emit
-        )
-
-
-
-        widgets = [
-
-            self.title_label,
-
-            self.current_file_label,
-
-            self.progress_bar,
-
-            self.success_label,
-
-            self.failed_label,
-
-            self.cancel_button,
-
-            self.open_folder_button
-
-        ]
-
-
-
-        for widget in widgets:
-
-            layout.addWidget(
+            box_layout.addWidget(
                 widget
             )
 
+
+        box.setLayout(
+            box_layout
+        )
+
+
+        layout.addWidget(
+            box
+        )
 
 
         self.setLayout(
@@ -2005,93 +3085,248 @@ class ProcessStatus(QWidget):
 
 
 
-    # =========================
-    # STATUS CONTROL
-    # =========================
+    def update_monitor(self):
+
+
+        cpu = psutil.cpu_percent()
+
+
+        ram = psutil.virtual_memory().percent
+
+
+
+        self.cpu_label.setText(
+            f"CPU Usage: {cpu}%"
+        )
+
+
+        self.ram_label.setText(
+            f"RAM Usage: {ram}%"
+        )
+
+
+
+    def set_worker_info(
+            self,
+            workers
+    ):
+
+
+        self.process_label.setText(
+            f"Workers: {workers}"
+        )
+
+
+
+    def set_profile(
+            self,
+            profile
+    ):
+
+
+        self.webp_label.setText(
+            f"WEBP Profile: {profile}"
+        )
+</file>
+
+<file path="app/widgets/process_panel.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout
+)
+
+
+from PySide6.QtCore import Signal
+
+
+from app.widgets.process_status import (
+    ProcessStatus
+)
+
+
+
+
+
+class ProcessPanel(QWidget):
+
+
+    # ==========================
+    # SIGNAL
+    # ==========================
+
+
+    cancel_clicked = Signal()
+
+
+    open_folder_clicked = Signal()
+
+
+
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+        self.init_components()
+
+        self.init_ui()
+
+        self.connect_signals()
+
+
+
+
+
+    # ==========================
+    # COMPONENT
+    # ==========================
+
+
+    def init_components(self):
+
+
+        self.process_status = ProcessStatus()
+
+
+
+
+
+    # ==========================
+    # UI
+    # ==========================
+
+
+    def init_ui(self):
+
+
+        layout = QVBoxLayout()
+
+
+
+        layout.addWidget(
+
+            self.process_status
+
+        )
+
+
+
+        self.setLayout(
+
+            layout
+
+        )
+
+
+
+
+
+    # ==========================
+    # SIGNAL
+    # ==========================
+
+
+    def connect_signals(self):
+
+
+        self.process_status.cancel_clicked.connect(
+
+            self.cancel_clicked.emit
+
+        )
+
+
+        self.process_status.open_folder_clicked.connect(
+
+            self.open_folder_clicked.emit
+
+        )
+
+
+
+
+
+    # ==========================
+    # PUBLIC API
+    # ==========================
+
+
+    def reset(self):
+
+
+        self.process_status.reset()
+
+
+
 
 
     def set_processing(self):
 
-        self.title_label.setText(
-            "Processing Status: Processing"
-        )
+
+        self.process_status.set_processing()
 
 
-        self.open_folder_button.setEnabled(
-            False
-        )
-
-
-        self.cancel_button.show()
 
 
 
     def set_completed(self):
 
-        self.title_label.setText(
-            "Processing Status: Completed"
-        )
+
+        self.process_status.set_completed()
 
 
-        self.open_folder_button.setEnabled(
-            True
-        )
-
-
-        self.cancel_button.hide()
 
 
 
     def set_cancelled(self):
 
-        self.title_label.setText(
-            "Processing Status: Cancelled"
-        )
+
+        self.process_status.set_cancelled()
 
 
-        self.open_folder_button.setEnabled(
-            True
-        )
-
-
-        self.cancel_button.hide()
 
 
 
     def set_idle(self):
 
-        self.title_label.setText(
-            "Processing Status: Idle"
-        )
 
-
-        self.open_folder_button.setEnabled(
-            False
-        )
-
-
-        self.cancel_button.hide()
+        self.process_status.set_idle()
 
 
 
-    # =========================
-    # UPDATE DATA
-    # =========================
 
 
-    def update_file(self, filename):
+    def update_file(
+            self,
+            filename
+    ):
 
-        self.current_file_label.setText(
-            f"Current File: {filename}"
+
+        self.process_status.update_file(
+
+            filename
+
         )
 
 
 
-    def update_progress(self, value):
 
-        self.progress_bar.setValue(
-            value
+
+    def update_progress(
+            self,
+            progress
+    ):
+
+
+        self.process_status.update_progress(
+
+            progress
+
         )
+
+
 
 
 
@@ -2101,222 +3336,14 @@ class ProcessStatus(QWidget):
             failed
     ):
 
-        self.success_label.setText(
-            f"Success: {success}"
+
+        self.process_status.update_result(
+
+            success,
+
+            failed
+
         )
-
-
-        self.failed_label.setText(
-            f"Failed: {failed}"
-        )
-
-
-
-    def reset(self):
-
-        self.set_idle()
-
-
-        self.current_file_label.setText(
-            "Current File: -"
-        )
-
-
-        self.progress_bar.setValue(
-            0
-        )
-
-
-        self.update_result(
-            0,
-            0
-        )
-</file>
-
-<file path="app/widgets/settings_panel.py">
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QRadioButton,
-    QLabel,
-    QSlider
-)
-
-
-from PySide6.QtCore import Qt, Signal
-
-
-
-class SettingsPanel(QWidget):
-
-
-    settings_changed = Signal(dict)
-
-
-
-    def __init__(self):
-
-        super().__init__()
-
-
-        self.init_ui()
-
-
-
-    def init_ui(self):
-
-        layout = QVBoxLayout()
-
-
-
-        self.lossless_radio = QRadioButton(
-            "Lossless"
-        )
-
-
-        self.lossy_radio = QRadioButton(
-            "Lossy"
-        )
-
-
-
-        self.lossless_radio.setChecked(
-            True
-        )
-
-
-
-        self.quality_label = QLabel(
-            "Quality: 80"
-        )
-
-
-        self.quality_slider = QSlider(
-            Qt.Horizontal
-        )
-
-
-        self.quality_slider.setMinimum(
-            1
-        )
-
-
-        self.quality_slider.setMaximum(
-            100
-        )
-
-
-        self.quality_slider.setValue(
-            80
-        )
-
-
-        self.quality_slider.setEnabled(
-            False
-        )
-
-
-
-        self.lossless_radio.clicked.connect(
-            self.update_state
-        )
-
-
-        self.lossy_radio.clicked.connect(
-            self.update_state
-        )
-
-
-        self.quality_slider.valueChanged.connect(
-            self.update_quality
-        )
-
-
-
-        layout.addWidget(
-            self.lossless_radio
-        )
-
-
-        layout.addWidget(
-            self.lossy_radio
-        )
-
-
-        layout.addWidget(
-            self.quality_label
-        )
-
-
-        layout.addWidget(
-            self.quality_slider
-        )
-
-
-
-        self.setLayout(
-            layout
-        )
-
-
-        self.emit_settings()
-
-
-
-    def update_state(self):
-
-        is_lossy = self.lossy_radio.isChecked()
-
-
-
-        self.quality_slider.setEnabled(
-            is_lossy
-        )
-
-
-        self.emit_settings()
-
-
-
-    def update_quality(self, value):
-
-        self.quality_label.setText(
-            f"Quality: {value}"
-        )
-
-
-        self.emit_settings()
-
-
-
-    def build_settings(self):
-
-        return {
-
-            "mode":
-                "lossy"
-                if self.lossy_radio.isChecked()
-                else "lossless",
-
-
-            "quality":
-                self.quality_slider.value()
-
-        }
-
-
-
-    def emit_settings(self):
-
-        self.settings_changed.emit(
-            self.build_settings()
-        )
-
-
-
-    def get_settings(self):
-
-        return self.build_settings()
 </file>
 
 <file path="app/__init__.py">
@@ -2404,39 +3431,4225 @@ if __name__ == "__main__":
     main()
 </file>
 
+<file path="test_hardware.py">
+from app.core.performance_config import PerformanceConfig
+
+
+
+config = PerformanceConfig()
+
+
+print(
+    config.get_info()
+)
+</file>
+
+<file path="test_pool.py">
+from app.core.process_pool import ProcessPoolManager
+
+
+print("Process pool loaded")
+</file>
+
+<file path="app/core/config.py">
+from pathlib import Path
+
+
+
+APP_NAME = "Image2WEBP Converter"
+
+APP_VERSION = "1.0.0"
+
+
+
+def get_default_output():
+
+    pictures = Path.home() / "Pictures"
+
+
+    output = pictures / "Image2WEBP"
+
+
+
+    output.mkdir(
+
+        parents=True,
+
+        exist_ok=True
+
+    )
+
+
+
+    return output
+</file>
+
+<file path="app/core/conversion_worker.py">
+from app.core.converter import convert_image
+
+from app.models.process_result import ProcessResult
+
+
+
+
+
+def process_single_image(task):
+    """
+    High performance WEBP conversion worker.
+
+    Task format:
+
+    (
+        input_path,
+        output_path,
+        mode,
+        quality,
+        method
+    )
+
+    Worker:
+        input image
+        ↓
+        WEBP encoding
+        ↓
+        return result
+    """
+
+
+
+    image_path = None
+
+
+    try:
+
+
+        (
+            image_path,
+            output_path,
+            mode,
+            quality,
+            method
+
+        ) = task
+
+
+
+        success = convert_image(
+
+            source_path=image_path,
+
+            output_path=output_path,
+
+            mode=mode,
+
+            quality=quality,
+
+            method=method
+
+        )
+
+
+
+        return ProcessResult(
+
+            success=success,
+
+            file=image_path,
+
+            output=output_path
+
+        )
+
+
+
+    except Exception as error:
+
+
+        return ProcessResult(
+
+            success=False,
+
+            file=image_path,
+
+            output=str(error)
+
+        )
+</file>
+
+<file path="app/core/image_loader.py">
+from pathlib import Path
+
+from app.models.image_model import ImageModel
+
+
+
+# Set lebih cepat untuk pengecekan
+SUPPORTED_FORMAT = {
+    ".jpg",
+    ".jpeg",
+    ".png"
+}
+
+
+
+def is_supported(file_path):
+
+    try:
+
+        return (
+            Path(file_path)
+            .suffix
+            .lower()
+            in SUPPORTED_FORMAT
+        )
+
+    except Exception:
+
+        return False
+
+
+
+def load_files(files):
+
+    images = []
+
+
+    for file in files:
+
+
+        path = Path(file)
+
+
+        if not is_supported(path):
+
+            continue
+
+
+        try:
+
+            images.append(
+                ImageModel(
+                    str(path.resolve())
+                )
+            )
+
+
+        except Exception as error:
+
+
+            print(
+                f"Failed loading image {file}: {error}"
+            )
+
+
+    return images
+
+
+
+def load_folder(folder):
+
+    folder_path = Path(folder)
+
+
+    images = []
+
+
+    if not folder_path.exists():
+
+        return images
+
+
+
+    # Scan hanya file dengan extension target
+    for extension in SUPPORTED_FORMAT:
+
+
+        for file in folder_path.rglob(
+                f"*{extension}"
+        ):
+
+
+            if not file.is_file():
+
+                continue
+
+
+
+            try:
+
+
+                images.append(
+
+                    ImageModel(
+                        str(file.resolve())
+                    )
+
+                )
+
+
+            except Exception as error:
+
+
+                print(
+                    f"Failed loading image {file}: {error}"
+                )
+
+
+
+    return images
+</file>
+
+<file path="app/core/process_pool.py">
+from pathlib import Path
+
+
+from concurrent.futures import (
+    ProcessPoolExecutor,
+    as_completed
+)
+
+
+from app.core.conversion_worker import (
+    process_single_image
+)
+
+
+from app.core.performance_config import (
+    PerformanceConfig
+)
+
+
+from app.core.webp_profile import (
+    get_webp_method
+)
+
+
+from app.utils.file_utils import (
+    create_output_path
+)
+
+
+
+
+
+class ProcessPoolManager:
+
+
+    def __init__(
+            self,
+            workers=None
+    ):
+
+
+        # ==================================
+        # HARDWARE DETECTION
+        # ==================================
+
+
+        if workers is None:
+
+
+            config = PerformanceConfig()
+
+
+            workers = config.calculate_workers()
+
+
+
+            print(
+                "Hardware Profile:"
+            )
+
+
+            print(
+                config.get_info()
+            )
+
+
+        else:
+
+
+            print(
+                "Manual worker override"
+            )
+
+
+
+        self.workers = workers
+
+
+        self.cancelled = False
+
+
+        self.executor = None
+
+
+        self.futures = []
+
+
+
+        print(
+            f"Workers active: {self.workers}"
+        )
+
+
+
+
+
+    # ==================================
+    # CANCEL
+    # ==================================
+
+
+    def cancel(self):
+
+
+        self.cancelled = True
+
+
+
+        for future in self.futures:
+
+
+            future.cancel()
+
+
+
+
+
+    # ==================================
+    # FILE SIZE
+    # ==================================
+
+
+    def get_file_size(
+            self,
+            path
+    ):
+
+
+        try:
+
+
+            return Path(
+                path
+            ).stat().st_size
+
+
+
+        except Exception:
+
+
+            return 0
+
+
+
+
+
+    # ==================================
+    # CREATE TASK
+    # ==================================
+
+
+    def create_task(
+            self,
+            image,
+            settings,
+            output_folder
+    ):
+
+
+        output_path = create_output_path(
+
+            str(image.path),
+
+            output_folder
+
+        )
+
+
+
+        method = get_webp_method(
+
+            settings.get(
+
+                "profile",
+
+                "fast"
+
+            )
+
+        )
+
+
+
+        return (
+
+            str(image.path),
+
+            str(output_path),
+
+            settings["mode"],
+
+            settings["quality"],
+
+            method
+
+        )
+
+
+
+
+
+    # ==================================
+    # PROCESS
+    # ==================================
+
+
+    def process(
+            self,
+            images,
+            settings,
+            output_folder,
+            on_file=None,
+            on_progress=None
+    ):
+
+
+        self.cancelled = False
+
+
+        self.futures.clear()
+
+
+
+        total = len(images)
+
+
+
+        if total == 0:
+
+
+            return {
+
+                "success": 0,
+
+                "failed": 0,
+
+                "cancelled": False,
+
+                "input_bytes": 0,
+
+                "output_bytes": 0,
+
+                "saved_percent": 0
+
+            }
+
+
+
+
+        success = 0
+
+
+        failed = 0
+
+
+
+        input_bytes = 0
+
+
+        output_bytes = 0
+
+
+
+
+
+        active_workers = min(
+
+            self.workers,
+
+            total
+
+        )
+
+
+
+        print(
+
+            f"Active workers for job: {active_workers}"
+
+        )
+
+
+
+
+
+        # ==================================
+        # CREATE TASK
+        # ==================================
+
+
+        tasks = [
+
+            self.create_task(
+
+                image,
+
+                settings,
+
+                output_folder
+
+            )
+
+            for image in images
+
+        ]
+
+
+
+        # calculate original size
+
+
+        for task in tasks:
+
+
+            input_bytes += self.get_file_size(
+
+                task[0]
+
+            )
+
+
+
+
+
+        # ==================================
+        # PROCESS POOL
+        # ==================================
+
+
+        self.executor = ProcessPoolExecutor(
+
+            max_workers=active_workers
+
+        )
+
+
+
+        try:
+
+
+
+            for task in tasks:
+
+
+                if self.cancelled:
+
+
+                    break
+
+
+
+                future = self.executor.submit(
+
+                    process_single_image,
+
+                    task
+
+                )
+
+
+                self.futures.append(
+
+                    future
+
+                )
+
+
+
+
+
+            # ==================================
+            # RESULT COLLECTION
+            # ==================================
+
+
+            for index, future in enumerate(
+
+                    as_completed(self.futures),
+
+                    start=1
+
+            ):
+
+
+
+                if self.cancelled:
+
+
+                    break
+
+
+
+                try:
+
+
+                    result = future.result()
+
+
+
+                except Exception as error:
+
+
+                    print(
+
+                        f"Worker failed: {error}"
+
+                    )
+
+
+                    failed += 1
+
+
+                    continue
+
+
+
+
+
+                if result.success:
+
+
+                    success += 1
+
+
+
+                    output_bytes += self.get_file_size(
+
+                        result.output
+
+                    )
+
+
+
+                else:
+
+
+                    failed += 1
+
+
+
+
+
+                # ==================================
+                # FILE CALLBACK
+                # ==================================
+
+
+                if on_file:
+
+
+                    on_file(
+
+                        result.file
+
+                    )
+
+
+
+
+
+                # ==================================
+                # PROGRESS CALLBACK
+                # ==================================
+
+
+                if on_progress:
+
+
+                    progress = int(
+
+                        (
+
+                            index
+
+                            /
+
+                            total
+
+                        )
+
+                        *
+
+                        100
+
+                    )
+
+
+
+                    on_progress(
+
+                        progress,
+
+                        success,
+
+                        failed
+
+                    )
+
+
+
+
+
+        finally:
+
+
+
+            if self.executor:
+
+
+                self.executor.shutdown(
+
+                    wait=False,
+
+                    cancel_futures=True
+
+                )
+
+
+                self.executor = None
+
+
+
+
+
+        # ==================================
+        # COMPRESSION STATISTICS
+        # ==================================
+
+
+        saved_percent = 0
+
+
+
+        if input_bytes > 0:
+
+
+            saved_percent = (
+
+                (
+
+                    input_bytes
+
+                    -
+
+                    output_bytes
+
+                )
+
+                /
+
+                input_bytes
+
+            ) * 100
+
+
+
+
+
+        return {
+
+
+            "success":
+
+                success,
+
+
+            "failed":
+
+                failed,
+
+
+            "cancelled":
+
+                self.cancelled,
+
+
+
+            "input_bytes":
+
+                input_bytes,
+
+
+
+            "output_bytes":
+
+                output_bytes,
+
+
+
+            "saved_percent":
+
+                saved_percent
+
+        }
+</file>
+
+<file path="app/core/thumbnail_cache.py">
+from pathlib import Path
+
+import hashlib
+
+from PIL import Image
+
+from PySide6.QtGui import QPixmap
+
+
+
+
+
+class ThumbnailCache:
+
+
+    def __init__(
+            self,
+            cache_folder=None,
+            size=100
+    ):
+
+
+        self.size = size
+
+
+
+        if cache_folder is None:
+
+
+            cache_folder = (
+
+                Path.home()
+
+                /
+
+                ".webp_converter_cache"
+
+            )
+
+
+
+        self.cache_folder = Path(
+
+            cache_folder
+
+        )
+
+
+
+        self.thumbnail_folder = (
+
+            self.cache_folder
+
+            /
+
+            "thumbnails"
+
+        )
+
+
+
+        self.preview_folder = (
+
+            self.cache_folder
+
+            /
+
+            "previews"
+
+        )
+
+
+
+        self.thumbnail_folder.mkdir(
+
+            parents=True,
+
+            exist_ok=True
+
+        )
+
+
+        self.preview_folder.mkdir(
+
+            parents=True,
+
+            exist_ok=True
+
+        )
+
+
+
+        # RAM cache
+
+        self.memory_cache = {}
+
+
+
+
+
+    # ==================================
+    # CACHE KEY
+    # ==================================
+
+
+    def get_key(
+            self,
+            image_path
+    ):
+
+
+        image_path = Path(
+
+            image_path
+
+        )
+
+
+        stat = image_path.stat()
+
+
+
+        raw = (
+
+            str(image_path)
+
+            +
+
+            str(stat.st_mtime)
+
+            +
+
+            str(stat.st_size)
+
+        )
+
+
+
+        return hashlib.md5(
+
+            raw.encode()
+
+        ).hexdigest()
+
+
+
+
+
+    # ==================================
+    # THUMBNAIL
+    # ==================================
+
+
+    def create_thumbnail(
+            self,
+            image_path
+    ):
+
+
+        key = self.get_key(
+
+            image_path
+
+        )
+
+
+
+        cache_path = (
+
+            self.thumbnail_folder
+
+            /
+
+            f"{key}.webp"
+
+        )
+
+
+
+        if cache_path.exists():
+
+
+            return cache_path
+
+
+
+
+        try:
+
+
+            with Image.open(
+
+                image_path
+
+            ) as image:
+
+
+
+                image.thumbnail(
+
+                    (
+
+                        self.size,
+
+                        self.size
+
+                    )
+
+                )
+
+
+
+                if image.mode != "RGB":
+
+
+                    image = image.convert(
+
+                        "RGB"
+
+                    )
+
+
+
+                image.save(
+
+                    cache_path,
+
+                    "WEBP",
+
+                    quality=75
+
+                )
+
+
+
+            return cache_path
+
+
+
+        except Exception as error:
+
+
+            print(
+
+                f"Thumbnail error: {error}"
+
+            )
+
+
+            return None
+
+
+
+
+
+    # ==================================
+    # PREVIEW
+    # ==================================
+
+
+    def create_preview(
+            self,
+            image_path,
+            size=400
+    ):
+
+
+        key = self.get_key(
+
+            image_path
+
+        )
+
+
+
+        cache_path = (
+
+            self.preview_folder
+
+            /
+
+            f"{key}.webp"
+
+        )
+
+
+
+        if cache_path.exists():
+
+
+            return cache_path
+
+
+
+
+        try:
+
+
+            with Image.open(
+
+                image_path
+
+            ) as image:
+
+
+
+                image.thumbnail(
+
+                    (
+
+                        size,
+
+                        size
+
+                    )
+
+                )
+
+
+
+                if image.mode not in (
+
+                    "RGB",
+
+                    "RGBA"
+
+                ):
+
+
+                    image = image.convert(
+
+                        "RGBA"
+
+                    )
+
+
+
+                image.save(
+
+                    cache_path,
+
+                    "WEBP",
+
+                    quality=85
+
+                )
+
+
+
+            return cache_path
+
+
+
+        except Exception as error:
+
+
+            print(
+
+                f"Preview error: {error}"
+
+            )
+
+
+            return None
+
+
+
+
+
+    # ==================================
+    # PIXMAP
+    # ==================================
+
+
+    def get_pixmap(
+            self,
+            image_path
+    ):
+
+
+        key = str(
+
+            image_path
+
+        )
+
+
+
+        if key in self.memory_cache:
+
+
+            return self.memory_cache[key]
+
+
+
+        thumbnail = self.create_thumbnail(
+
+            image_path
+
+        )
+
+
+
+        if thumbnail is None:
+
+
+            return QPixmap()
+
+
+
+        pixmap = QPixmap(
+
+            str(thumbnail)
+
+        )
+
+
+
+        self.memory_cache[key] = pixmap
+
+
+
+        return pixmap
+</file>
+
 <file path="README.md">
 # Image2WEBP Converter
 
-Desktop application for converting JPG, JPEG, and PNG images into WEBP format.
+A high-performance desktop application for converting JPG, JPEG, and PNG images into optimized WEBP format.
 
+Built with Python and PySide6, Image2WEBP Converter provides fast batch processing, configurable compression, and real-time conversion monitoring.
+
+---
 
 ## Features
 
+### Image Input
+
 - Single image conversion
 - Multiple image conversion
-- Folder conversion
-- Drag and drop input
-- Lossless WEBP
-- Lossy WEBP with quality control
+- Folder batch conversion
+- Drag and drop image input
+- Duplicate image detection
+- Thumbnail preview
+- Image list management
+- Cached thumbnails for faster loading
 
+---
 
-## Supported Input
+### WEBP Conversion
+
+- Lossless WEBP conversion
+  - Preserve original image quality
+  - Quality setting is ignored
+
+- Lossy WEBP conversion
+  - Adjustable quality control (1-100)
+  - Higher quality produces better image quality with larger file size
+  - Lower quality produces smaller file size with more compression
+
+---
+
+### Compression Profile
+
+Choose conversion performance based on your needs:
+
+| Profile | Method | Description |
+|---|---|---|
+| Fast Conversion | Method 2 | Faster processing for large batch conversion |
+| Balanced Quality | Method 4 | Balance between speed and compression |
+| Maximum Compression | Method 6 | Smaller output size with longer processing time |
+
+---
+
+### Performance Features
+
+- Multiprocessing conversion engine
+- Automatic hardware detection
+- Adaptive worker allocation
+- Background conversion thread
+- Non-blocking GUI operation
+- Cancel conversion support
+
+---
+
+### Conversion Monitoring
+
+Real-time monitoring includes:
+
+- Conversion progress
+- Current processing file
+- Success count
+- Failed count
+- CPU usage monitoring
+- RAM usage monitoring
+- Active worker information
+- Selected WEBP compression profile
+
+---
+
+### Conversion Statistics
+
+After conversion, the application provides:
+
+- Total processed files
+- Successful conversions
+- Failed conversions
+- Conversion duration
+- Processing speed (images/second)
+- Original file size
+- Output WEBP size
+- Storage reduction percentage
+
+---
+
+## Supported Input Formats
 
 - JPG
 - JPEG
 - PNG
 
+---
 
-## Output
+## Output Format
 
-WEBP format
+- WEBP
+
+---
+
+## Technology Stack
+
+- Python
+- PySide6 (Desktop GUI)
+- Pillow (Image Processing)
+- ProcessPoolExecutor (Multiprocessing)
+- QThread (Background Processing)
+
+---
+
+## Performance Example
+
+Test environment:
+
+- CPU: 8 Cores / 16 Threads
+- RAM: 16 GB
+
+Example batch conversion:
+</file>
+
+<file path="test_performance.py">
+from pathlib import Path
+import time
+import shutil
+import psutil
+
+
+from app.core.process_pool import ProcessPoolManager
+from app.core.image_loader import load_folder
+
+
+
+def main():
+
+
+    input_folder = Path(
+        r"D:\TEST_IMAGES"
+    )
+
+
+    output_folder = Path(
+        r"D:\TEST_OUTPUT_WEBP"
+    )
+
+
+
+    print(
+        "Loading images..."
+    )
+
+
+
+    images = load_folder(
+        input_folder
+    )
+
+
+    print(
+        f"Total images: {len(images)}"
+    )
+
+
+
+    if not images:
+
+
+        print(
+            "No images found"
+        )
+
+
+        return
+
+
+
+    # ==========================
+    # WEBP SETTINGS
+    # ==========================
+
+    settings = {
+
+        "mode": "lossy",
+
+        "quality": 80,
+
+        "profile": "compression"
+
+    }
+
+
+
+    # ==========================
+    # CLEAN OUTPUT
+    # ==========================
+
+    if output_folder.exists():
+
+        shutil.rmtree(
+            output_folder
+        )
+
+
+
+    output_folder.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+
+
+    # ==========================
+    # SYSTEM MONITOR
+    # ==========================
+
+    ram_before = (
+        psutil.virtual_memory()
+    )
+
+
+
+    cpu_before = (
+        psutil.cpu_percent(
+            interval=1
+        )
+    )
+
+
+
+    start = time.perf_counter()
+
+
+
+    manager = ProcessPoolManager()
+
+
+
+    result = manager.process(
+
+        images,
+
+        settings,
+
+        str(output_folder)
+
+    )
+
+
+
+    end = time.perf_counter()
+
+
+
+    ram_after = (
+        psutil.virtual_memory()
+    )
+
+
+
+    cpu_after = (
+        psutil.cpu_percent(
+            interval=1
+        )
+    )
+
+
+
+    elapsed = end - start
+
+
+
+    output_files = len(
+        list(
+            output_folder.glob("*")
+        )
+    )
+
+
+
+    total_size = sum(
+
+        file.stat().st_size
+
+        for file in output_folder.glob("*")
+
+    )
+
+
+    total_size_mb = (
+        total_size
+        /
+        (1024 ** 2)
+    )
+
+
+
+    print(
+        "\nRESULT"
+    )
+
+
+    print(
+        result
+    )
+
+
+    print(
+        f"Time: {elapsed:.2f}s"
+    )
+
+
+    print(
+        f"CPU Before: {cpu_before}%"
+    )
+
+
+    print(
+        f"CPU After: {cpu_after}%"
+    )
+
+
+    print(
+        f"RAM Before: {ram_before.percent}%"
+    )
+
+
+    print(
+        f"RAM After: {ram_after.percent}%"
+    )
+
+
+    print(
+        f"Output Files: {output_files}"
+    )
+
+
+    print(
+        f"Output Size: {total_size_mb:.2f} MB"
+    )
+
+
+
+if __name__ == "__main__":
+
+    main()
+</file>
+
+<file path="app/core/converter.py">
+from pathlib import Path
+
+from PIL import Image
+
+
+
+DEFAULT_WEBP_METHOD = 2
+
+
+
+SUPPORTED_MODES = (
+    "lossless",
+    "lossy"
+)
+
+
+
+def convert_image(
+        source_path,
+        output_path,
+        mode="lossless",
+        quality=80,
+        method=DEFAULT_WEBP_METHOD
+):
+    """
+    High performance WEBP converter.
+
+    Optimized for:
+    - multiprocessing
+    - batch conversion
+    - low memory usage
+    """
+
+
+
+    image = None
+
+
+
+    try:
+
+
+        source_path = Path(
+            source_path
+        )
+
+
+        output_path = Path(
+            output_path
+        )
+
+
+
+        # ==========================
+        # VALIDATION
+        # ==========================
+
+
+        if mode not in SUPPORTED_MODES:
+
+            raise ValueError(
+                f"Invalid mode: {mode}"
+            )
+
+
+
+        method = max(
+
+            0,
+
+            min(
+
+                int(method),
+
+                6
+
+            )
+
+        )
+
+
+
+        if mode == "lossy":
+
+            quality = max(
+
+                1,
+
+                min(
+
+                    int(quality),
+
+                    100
+
+                )
+
+            )
+
+
+
+        # ==========================
+        # OUTPUT
+        # ==========================
+
+
+        output_path.parent.mkdir(
+
+            parents=True,
+
+            exist_ok=True
+
+        )
+
+
+
+        # ==========================
+        # LOAD IMAGE
+        # ==========================
+
+
+        image = Image.open(
+
+            source_path
+
+        )
+
+
+
+        # ==========================
+        # COLOR OPTIMIZATION
+        # ==========================
+
+
+        if image.mode not in (
+
+            "RGB",
+
+            "RGBA"
+
+        ):
+
+
+            if "transparency" in image.info:
+
+
+                converted = image.convert(
+
+                    "RGBA"
+
+                )
+
+
+            else:
+
+
+                converted = image.convert(
+
+                    "RGB"
+
+                )
+
+
+
+            image.close()
+
+
+            image = converted
+
+
+
+
+
+        # ==========================
+        # WEBP OPTIONS
+        # ==========================
+
+
+        options = {
+
+            "format":
+                "WEBP",
+
+            "method":
+                method
+
+        }
+
+
+
+        if mode == "lossless":
+
+
+            options.update({
+
+                "lossless": True
+
+            })
+
+
+
+        else:
+
+
+            options.update({
+
+                "lossless": False,
+
+                "quality": quality
+
+            })
+
+
+
+        # ==========================
+        # SAVE
+        # ==========================
+
+
+        image.save(
+
+            output_path,
+
+            **options
+
+        )
+
+
+
+        return True
+
+
+
+
+
+    except Exception as error:
+
+
+        print(
+
+            f"Conversion failed: {error}"
+
+        )
+
+
+        return False
+
+
+
+
+
+    finally:
+
+
+        if image is not None:
+
+
+            image.close()
+</file>
+
+<file path="app/models/image_model.py">
+from pathlib import Path
+
+
+
+class ImageModel:
+
+
+    def __init__(
+            self,
+            path
+    ):
+
+
+        self.path = Path(path)
+
+
+        # ==========================
+        # BASIC INFO
+        # ==========================
+
+        self.filename = (
+            self.path.name
+        )
+
+
+        self.extension = (
+            self.path.suffix
+            .lower()
+        )
+
+
+
+        # ==========================
+        # FILE CACHE
+        # ==========================
+
+        self._size = None
+
+        self._modified = None
+
+
+
+        self.load_file_metadata()
+
+
+
+        # ==========================
+        # IMAGE METADATA
+        # LAZY
+        # ==========================
+
+        self._width = None
+
+        self._height = None
+
+        self._mode = None
+
+
+
+
+
+    # ==================================
+    # FILE METADATA
+    # ==================================
+
+
+    def load_file_metadata(self):
+
+
+        try:
+
+
+            stat = self.path.stat()
+
+
+            self._size = stat.st_size
+
+
+            self._modified = stat.st_mtime
+
+
+
+        except Exception:
+
+
+            self._size = 0
+
+            self._modified = 0
+
+
+
+
+
+    # ==================================
+    # SIZE
+    # ==================================
+
+
+    def get_size(self):
+
+
+        return self._size
+
+
+
+
+
+    def get_modified_time(self):
+
+
+        return self._modified
+
+
+
+
+
+    # ==================================
+    # IMAGE INFO
+    # ==================================
+
+
+    def load_image_metadata(self):
+
+
+        if self._width is not None:
+
+            return
+
+
+
+        try:
+
+            from PIL import Image
+
+
+
+            with Image.open(
+                self.path
+            ) as image:
+
+
+                self._width = image.width
+
+
+                self._height = image.height
+
+
+                self._mode = image.mode
+
+
+
+        except Exception:
+
+
+            self._width = 0
+
+            self._height = 0
+
+            self._mode = None
+
+
+
+
+
+    def get_resolution(self):
+
+
+        self.load_image_metadata()
+
+
+        return (
+
+            self._width,
+
+            self._height
+
+        )
+
+
+
+
+
+    def get_mode(self):
+
+
+        self.load_image_metadata()
+
+
+        return self._mode
+
+
+
+
+
+    def __repr__(self):
+
+
+        return (
+
+            f"ImageModel("
+            f"{self.filename}"
+            f")"
+
+        )
+</file>
+
+<file path="app/views/convert_page.py">
+import os
+import time
+
+
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QFileDialog,
+    QMessageBox,
+    QScrollArea
+)
+
+
+
+from app.components.drop_section import DropSection
+
+from app.components.action_section import ActionSection
+
+from app.components.image_section import ImageSection
+
+from app.components.conversion_section import ConversionSection
+
+from app.components.process_section import ProcessSection
+
+
+
+from app.core.conversion_thread import ConversionThread
+
+
+
+
+
+class ConvertPage(QWidget):
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+        self.worker = None
+
+
+        self.start_time = None
+
+
+        self.init_components()
+
+        self.init_ui()
+
+        self.connect_signals()
+
+
+
+
+
+    # ==================================================
+    # COMPONENTS
+    # ==================================================
+
+
+    def init_components(self):
+
+
+        self.drop_section = DropSection()
+
+
+        self.action_section = ActionSection()
+
+
+        self.image_section = ImageSection()
+
+
+        self.conversion_section = ConversionSection()
+
+
+        self.process_section = ProcessSection()
+
+
+
+
+
+    # ==================================================
+    # UI
+    # ==================================================
+
+
+    def init_ui(self):
+
+
+        main_layout = QVBoxLayout()
+
+
+
+        self.scroll_area = QScrollArea()
+
+
+        self.scroll_area.setWidgetResizable(
+            True
+        )
+
+
+
+        self.content_widget = QWidget()
+
+
+
+        layout = QVBoxLayout(
+            self.content_widget
+        )
+
+
+
+        widgets = [
+            self.drop_section,
+            self.image_section,
+            self.conversion_section,
+            self.action_section,
+            self.process_section
+        ]
+
+
+
+        for widget in widgets:
+
+            layout.addWidget(
+                widget
+            )
+
+
+
+        self.scroll_area.setWidget(
+            self.content_widget
+        )
+
+
+        main_layout.addWidget(
+            self.scroll_area
+        )
+
+
+        self.setLayout(
+            main_layout
+        )
+
+
+
+
+
+    # ==================================================
+    # SIGNAL CONNECTION
+    # ==================================================
+
+
+    def connect_signals(self):
+
+
+        self.drop_section.drop_area.files_dropped.connect(
+            self.image_section.add_paths
+        )
+
+
+        self.drop_section.add_image_button.clicked.connect(
+            self.add_single_image
+        )
+
+
+        self.drop_section.add_multiple_button.clicked.connect(
+            self.add_multiple_images
+        )
+
+
+        self.drop_section.add_folder_button.clicked.connect(
+            self.add_folder
+        )
+        
+
+
+        
+
+
+        
+
+
+        
+
+
+        
+
+
+        self.action_section.convert_selected_clicked.connect(
+            self.convert_selected
+        )
+
+
+        self.action_section.convert_all_clicked.connect(
+            self.convert_all
+        )
+
+
+
+        self.process_section.open_folder_clicked.connect(
+            self.open_output_folder
+        )
+
+
+        self.action_section.cancel_clicked.connect(
+            self.cancel_processing
+        )
+
+
+
+
+
+    # ==================================================
+    # IMAGE INPUT
+    # ==================================================
+
+
+    def add_single_image(self):
+
+
+        file, _ = QFileDialog.getOpenFileName(
+
+            self,
+
+            "Select Image",
+
+            "",
+
+            "Images (*.jpg *.jpeg *.png *.webp)"
+
+        )
+
+
+        if file:
+
+            self.image_section.add_images(
+                [file]
+            )
+
+
+
+
+
+    def add_multiple_images(self):
+
+
+        files, _ = QFileDialog.getOpenFileNames(
+
+            self,
+
+            "Select Images",
+
+            "",
+
+            "Images (*.jpg *.jpeg *.png *.webp)"
+
+        )
+
+
+        if files:
+
+            self.image_section.add_images(
+                files
+            )
+
+
+
+
+
+    def add_folder(self):
+
+
+        folder = QFileDialog.getExistingDirectory(
+
+            self,
+
+            "Select Folder"
+
+        )
+
+
+        if folder:
+
+            self.image_section.add_folder(
+                folder
+            )
+
+
+
+
+
+    def delete_all(self):
+
+
+        self.image_section.clear()
+
+
+        self.process_section.reset()
+
+
+        self.conversion_section.reset()
+
+
+
+
+
+    # ==================================================
+    # CONVERSION REQUEST
+    # ==================================================
+
+
+    def convert_selected(self):
+
+
+        image = self.image_section.get_selected()
+
+
+
+        if image is None:
+
+
+            QMessageBox.warning(
+
+                self,
+
+                "No Image",
+
+                "Please select an image first."
+
+            )
+
+
+            return
+
+
+
+        self.start_conversion(
+
+            [image]
+
+        )
+
+
+
+
+
+    def convert_all(self):
+
+
+        images = self.image_section.get_images()
+
+
+
+        if not images:
+
+
+            QMessageBox.warning(
+
+                self,
+
+                "No Image",
+
+                "No images available."
+
+            )
+
+
+            return
+
+
+
+        self.start_conversion(
+
+            images
+
+        )
+
+
+
+
+
+    # ==================================================
+    # START CONVERSION
+    # ==================================================
+
+
+    def start_conversion(
+            self,
+            images
+    ):
+
+
+        if self.worker:
+
+
+            QMessageBox.warning(
+
+                self,
+
+                "Processing",
+
+                "Conversion is already running."
+
+            )
+
+
+            return
+
+
+
+
+
+        self.action_section.set_processing(True)
+
+
+        self.process_section.reset()
+
+
+        self.process_section.set_processing()
+
+
+
+        # TIMER START
+
+        self.start_time = time.perf_counter()
+
+
+
+        settings = (
+
+            self.conversion_section.get_settings()
+
+        )
+
+
+        output_folder = (
+
+            self.conversion_section.get_output_folder()
+
+        )
+
+
+
+        print(
+            "Conversion Settings:",
+            settings
+        )
+
+
+        print(
+            "Output:",
+            output_folder
+        )
+
+
+
+        # PERFORMANCE INFO
+
+
+        self.process_section.set_profile(
+
+            settings["profile"]
+
+        )
+
+
+        self.process_section.set_workers(
+
+            self.get_worker_count()
+
+        )
+
+
+
+        self.worker = ConversionThread(
+
+            images,
+
+            settings,
+
+            output_folder
+
+        )
+
+
+
+        self.worker.file_processed.connect(
+
+            self.process_section.update_file
+
+        )
+
+
+        self.worker.progress_changed.connect(
+
+            self.update_progress
+
+        )
+
+
+        self.worker.conversion_finished.connect(
+
+            self.conversion_finished
+
+        )
+
+
+        self.worker.conversion_failed.connect(
+
+            self.conversion_failed
+
+        )
+
+
+        self.worker.finished.connect(
+
+            self.cleanup_worker
+
+        )
+
+
+
+        self.worker.start()
+
+
+
+
+
+    # ==================================================
+    # PERFORMANCE
+    # ==================================================
+
+
+    def get_worker_count(self):
+
+
+        try:
+
+
+            from app.core.performance_config import (
+
+                PerformanceConfig
+
+            )
+
+
+            config = PerformanceConfig()
+
+
+            return config.calculate_workers()
+
+
+
+        except Exception:
+
+
+            return 0
+
+
+
+
+
+    # ==================================================
+    # THREAD UPDATE
+    # ==================================================
+
+
+    def update_progress(
+            self,
+            progress,
+            success,
+            failed
+    ):
+
+
+        self.process_section.update_progress(
+
+            progress
+
+        )
+
+
+        self.process_section.update_result(
+
+            success,
+
+            failed
+
+        )
+
+
+
+
+
+    # ==================================================
+    # FINISHED
+    # ==================================================
+
+
+    def conversion_finished(
+            self,
+            result
+    ):
+
+
+        self.action_section.set_processing(False)
+
+        duration = 0
+
+
+
+        if self.start_time:
+
+
+            duration = (
+
+                time.perf_counter()
+
+                -
+
+                self.start_time
+
+            )
+
+
+
+        total = (
+
+            result["success"]
+
+            +
+
+            result["failed"]
+
+        )
+
+
+
+        speed = 0
+
+
+
+        if duration > 0:
+
+
+            speed = total / duration
+
+
+
+        self.process_section.update_statistics({
+
+            "total": total,
+
+            "success": result["success"],
+
+            "failed": result["failed"],
+
+            "duration": duration,
+
+            "speed": speed,
+
+            "input_mb": result["input_bytes"] / (1024 * 1024),
+
+            "output_mb": result["output_bytes"] / (1024 * 1024),
+
+            "saved_percent": result["saved_percent"]
+
+        })
+
+
+
+
+
+        if result.get(
+            "cancelled",
+            False
+        ):
+
+
+            self.process_section.set_cancelled()
+
+
+
+            QMessageBox.information(
+
+                self,
+
+                "Cancelled",
+
+                "Conversion cancelled."
+
+            )
+
+
+
+        else:
+
+
+            self.process_section.set_completed()
+
+
+
+            QMessageBox.information(
+
+                self,
+
+                "Conversion Complete",
+
+                f"Success: {result['success']}\n"
+                f"Failed: {result['failed']}\n"
+                f"Time: {duration:.2f}s"
+
+            )
+
+
+
+
+
+    def conversion_failed(
+            self,
+            error
+    ):
+
+
+        self.action_section.set_processing(
+
+            False
+
+        )
+
+
+        self.process_section.set_idle()
+
+
+
+        QMessageBox.critical(
+
+            self,
+
+            "Conversion Failed",
+
+            error
+
+        )
+
+
+
+
+
+    # ==================================================
+    # CLEANUP
+    # ==================================================
+
+
+    def cleanup_worker(self):
+
+
+        worker = self.worker
+
+
+        self.worker = None
+
+
+
+        if worker:
+
+
+            worker.deleteLater()
+
+
+
+
+
+    # ==================================================
+    # CANCEL
+    # ==================================================
+
+
+    def cancel_processing(self):
+
+
+        if self.worker:
+
+
+            self.worker.cancel()
+
+
+
+            self.process_section.set_cancelled()
+
+
+
+
+
+    # ==================================================
+    # OUTPUT
+    # ==================================================
+
+
+    def open_output_folder(self):
+
+
+        folder = (
+
+            self.conversion_section.get_output_folder()
+
+        )
+
+
+
+        if os.path.exists(folder):
+
+
+            os.startfile(folder)
+</file>
+
+<file path="app/widgets/image_list.py">
+from PySide6.QtWidgets import (
+    QListWidget,
+    QListWidgetItem
+)
+
+
+from PySide6.QtGui import (
+    QIcon
+)
+
+
+from PySide6.QtCore import (
+    QSize,
+    Signal
+)
+
+
+from functools import partial
+
+
+from app.core.thumbnail_cache import (
+    ThumbnailCache
+)
+
+
+from app.core.thumbnail_loader import (
+    ThumbnailLoader
+)
+
+
+
+
+
+class ImageList(QListWidget):
+
+
+    image_selected = Signal(object)
+
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+        self.current_selected_item = None
+
+
+        self.thumbnail_cache = ThumbnailCache(
+
+            size=70
+
+        )
+
+
+        self.loading_threads = {}
+
+
+        self.loaded_paths = set()
+
+
+
+        self.setIconSize(
+
+            QSize(
+                70,
+                70
+            )
+
+        )
+
+
+        self.itemClicked.connect(
+
+            self.handle_click
+
+        )
+
+
+
+
+
+    # ==================================
+    # ADD IMAGE
+    # ==================================
+
+
+    def add_images(
+            self,
+            images
+    ):
+
+
+        for image in images:
+
+
+
+            path = str(
+                image.path
+            )
+
+
+            # prevent duplicate
+
+            if path in self.loaded_paths:
+
+                continue
+
+
+
+            self.loaded_paths.add(
+                path
+            )
+
+
+
+            item = QListWidgetItem()
+
+
+
+            item.setText(
+
+                f"{image.filename} | "
+                f"{image.extension.replace('.', '').upper()} | "
+                f"{self.format_size(image.get_size())}"
+
+            )
+
+
+
+            item.setData(
+
+                100,
+
+                image
+
+            )
+
+
+            self.addItem(
+
+                item
+
+            )
+
+
+
+            self.load_thumbnail(
+
+                item,
+
+                image
+
+            )
+
+
+
+
+
+    # ==================================
+    # THUMBNAIL
+    # ==================================
+
+
+    def load_thumbnail(
+            self,
+            item,
+            image
+    ):
+
+
+        key = str(
+            image.path
+        )
+
+
+
+        loader = ThumbnailLoader(
+
+            image,
+
+            self.thumbnail_cache
+
+        )
+
+
+
+        loader.thumbnail_ready.connect(
+
+            lambda image, pixmap, item=item:
+
+                self.set_thumbnail(
+                    item,
+                    pixmap
+                )
+
+        )
+
+
+
+        loader.finished.connect(
+
+            partial(
+
+                self.remove_loader,
+
+                key,
+
+                loader
+
+            )
+
+        )
+
+
+
+        self.loading_threads[key] = loader
+
+
+
+        loader.start()
+
+
+
+
+
+    def set_thumbnail(
+            self,
+            item,
+            pixmap
+    ):
+
+
+        if pixmap.isNull():
+
+            return
+
+
+
+        item.setIcon(
+
+            QIcon(
+
+                pixmap
+
+            )
+
+        )
+
+
+
+
+
+    def remove_loader(
+            self,
+            key,
+            loader
+    ):
+
+
+        if key in self.loading_threads:
+
+
+            del self.loading_threads[key]
+
+
+
+        loader.deleteLater()
+
+
+
+
+
+    # ==================================
+    # CLICK
+    # ==================================
+
+
+    def handle_click(
+            self,
+            item
+    ):
+
+
+        if self.current_selected_item == item:
+
+
+            self.clearSelection()
+
+
+            self.current_selected_item = None
+
+
+            self.image_selected.emit(
+
+                None
+
+            )
+
+
+            return
+
+
+
+        self.current_selected_item = item
+
+
+
+        self.image_selected.emit(
+
+            item.data(100)
+
+        )
+
+
+
+
+
+    # ==================================
+    # REMOVE
+    # ==================================
+
+
+    def remove_selected(self):
+
+
+        item = self.currentItem()
+
+
+
+        if item:
+
+
+            image = item.data(100)
+
+
+
+            if image:
+
+
+                self.loaded_paths.discard(
+
+                    str(image.path)
+
+                )
+
+
+
+            self.takeItem(
+
+                self.row(item)
+
+            )
+
+
+
+            self.current_selected_item = None
+
+
+
+
+
+    # ==================================
+    # CLEAR
+    # ==================================
+
+
+    def clear(self):
+
+
+        for loader in self.loading_threads.values():
+
+            loader.quit()
+
+            loader.wait()
+
+
+
+        self.loading_threads.clear()
+
+
+        self.loaded_paths.clear()
+
+
+
+        super().clear()
+
+
+        self.current_selected_item = None
+
+
+
+
+
+    # ==================================
+    # FORMAT SIZE
+    # ==================================
+
+
+    def format_size(
+            self,
+            size
+    ):
+
+
+        kb = size / 1024
+
+
+        mb = kb / 1024
+
+
+
+        if mb >= 1:
+
+
+            return f"{mb:.2f} MB"
+
+
+
+        return f"{kb:.2f} KB"
+</file>
+
+<file path="app/widgets/image_preview.py">
+from PySide6.QtWidgets import QLabel
+
+
+from PySide6.QtGui import QPixmap
+
+
+from PySide6.QtCore import Qt
+
+
+from app.core.thumbnail_cache import ThumbnailCache
+
+from app.core.preview_loader import PreviewLoader
+
+
+
+
+
+class ImagePreview(QLabel):
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+
+        self.preview_cache = ThumbnailCache(
+
+            size=400
+
+        )
+
+
+        self.loader = None
+
+
+
+        self.pixmap_cache = {}
+
+
+
+        self.setAlignment(
+
+            Qt.AlignCenter
+
+        )
+
+
+        self.setMinimumHeight(
+
+            300
+
+        )
+
+
+        self.show_empty()
+
+
+
+
+
+    def show_image(
+            self,
+            image
+    ):
+
+
+        if image is None:
+
+            self.show_empty()
+
+            return
+
+
+
+        key = str(
+
+            image.path
+
+        )
+
+
+
+        # ==========================
+        # MEMORY CACHE
+        # ==========================
+
+
+        if key in self.pixmap_cache:
+
+
+            self.setPixmap(
+
+                self.pixmap_cache[key]
+
+            )
+
+            return
+
+
+
+
+
+        # ==========================
+        # ASYNC LOAD
+        # ==========================
+
+
+        if self.loader:
+
+
+            self.loader.quit()
+
+
+
+        self.loader = PreviewLoader(
+
+            image,
+
+            self.preview_cache
+
+        )
+
+
+        self.loader.preview_ready.connect(
+
+            lambda pixmap:
+
+            self.set_preview(
+
+                key,
+
+                pixmap
+
+            )
+
+        )
+
+
+        self.loader.start()
+
+
+
+
+
+    def set_preview(
+            self,
+            key,
+            pixmap
+    ):
+
+
+        if pixmap.isNull():
+
+            self.show_empty()
+
+            return
+
+
+
+        self.pixmap_cache[key] = pixmap
+
+
+
+        self.setPixmap(
+
+            pixmap
+
+        )
+
+
+
+
+
+    def show_empty(self):
+
+
+        self.clear()
+
+
+        self.setText(
+
+            "Image Preview"
+
+        )
+</file>
+
+<file path="app/widgets/process_status.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton
+)
+
+from PySide6.QtCore import Signal
+
+
+class ProcessStatus(QWidget):
+
+    open_folder_clicked = Signal()
+
+
+    def __init__(self):
+        super().__init__()
+
+        self.init_ui()
+
+
+    # ==========================
+    # UI
+    # ==========================
+
+    def init_ui(self):
+
+        layout = QVBoxLayout(self)
+
+
+        self.title_label = QLabel(
+            "Processing Status: Idle"
+        )
+
+
+        self.current_file_label = QLabel(
+            "Current File: -"
+        )
+
+
+        self.progress_bar = QProgressBar()
+
+        self.progress_bar.setRange(
+            0,
+            100
+        )
+
+        self.progress_bar.setValue(
+            0
+        )
+
+
+        self.success_label = QLabel(
+            "Success: 0"
+        )
+
+
+        self.failed_label = QLabel(
+            "Failed: 0"
+        )
+
+
+        self.open_folder_button = QPushButton(
+            "Open Folder"
+        )
+
+        self.open_folder_button.setEnabled(
+            False
+        )
+
+
+        self.open_folder_button.clicked.connect(
+            self.open_folder_clicked.emit
+        )
+
+
+        widgets = [
+            self.title_label,
+            self.current_file_label,
+            self.progress_bar,
+            self.success_label,
+            self.failed_label,
+            self.open_folder_button
+        ]
+
+
+        for widget in widgets:
+            layout.addWidget(widget)
+
+
+
+    # ==========================
+    # STATUS
+    # ==========================
+
+    def set_processing(self):
+
+        self.title_label.setText(
+            "Processing Status: Processing"
+        )
+
+
+        self.open_folder_button.setEnabled(
+            False
+        )
+
+
+
+    def set_completed(self):
+
+        self.title_label.setText(
+            "Processing Status: Completed"
+        )
+
+
+        self.open_folder_button.setEnabled(
+            True
+        )
+
+
+
+    def set_cancelled(self):
+
+        self.title_label.setText(
+            "Processing Status: Cancelled"
+        )
+
+
+        self.open_folder_button.setEnabled(
+            True
+        )
+
+
+
+    def set_idle(self):
+
+        self.title_label.setText(
+            "Processing Status: Idle"
+        )
+
+
+        self.open_folder_button.setEnabled(
+            False
+        )
+
+
+
+    # ==========================
+    # UPDATE
+    # ==========================
+
+    def update_file(self, filename):
+
+        if filename:
+
+            self.current_file_label.setText(
+                f"Current File: {filename}"
+            )
+
+        else:
+
+            self.current_file_label.setText(
+                "Current File: -"
+            )
+
+
+
+    def update_progress(self, value):
+
+        value = max(
+            0,
+            min(value, 100)
+        )
+
+        self.progress_bar.setValue(
+            value
+        )
+
+
+
+    def update_result(self, success, failed):
+
+        self.success_label.setText(
+            f"Success: {success}"
+        )
+
+        self.failed_label.setText(
+            f"Failed: {failed}"
+        )
+
+
+
+    def update_status(
+        self,
+        progress,
+        success,
+        failed
+    ):
+
+        self.update_progress(progress)
+
+        self.update_result(
+            success,
+            failed
+        )
+
+
+
+    # ==========================
+    # RESET
+    # ==========================
+
+    def reset(self):
+
+        self.set_idle()
+
+
+        self.current_file_label.setText(
+            "Current File: -"
+        )
+
+
+        self.progress_bar.setValue(
+            0
+        )
+
+
+        self.update_result(
+            0,
+            0
+        )
+</file>
+
+<file path="app/widgets/settings_panel.py">
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QRadioButton,
+    QLabel,
+    QSlider,
+    QGroupBox
+)
+
+
+from PySide6.QtCore import (
+    Qt,
+    Signal
+)
+
+
+
+
+
+class SettingsPanel(QWidget):
+
+
+    settings_changed = Signal(dict)
+
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+        self.init_ui()
+
+
+
+
+
+    # =================================
+    # UI INITIALIZATION
+    # =================================
+
+
+    def init_ui(self):
+
+
+        layout = QVBoxLayout()
+
+
+
+        # =================================
+        # COMPRESSION MODE
+        # =================================
+
+
+        mode_group = QGroupBox(
+            "Compression Mode"
+        )
+
+
+        mode_layout = QVBoxLayout()
+
+
+
+        self.lossy_radio = QRadioButton(
+            "Lossy"
+        )
+
+
+        self.lossless_radio = QRadioButton(
+            "Lossless"
+        )
+
+
+        self.lossy_radio.setChecked(
+            True
+        )
+
+
+
+        mode_layout.addWidget(
+            self.lossy_radio
+        )
+
+
+        mode_layout.addWidget(
+            self.lossless_radio
+        )
+
+
+        mode_group.setLayout(
+            mode_layout
+        )
+
+
+
+
+
+        # =================================
+        # QUALITY CONTROL
+        # =================================
+
+
+        quality_group = QGroupBox(
+            "Quality"
+        )
+        self.quality_group = quality_group
+
+
+        quality_layout = QVBoxLayout()
+
+
+
+        self.quality_label = QLabel(
+            "Quality: 80"
+        )
+
+
+        self.quality_slider = QSlider(
+            Qt.Horizontal
+        )
+
+
+        self.quality_slider.setRange(
+            1,
+            100
+        )
+
+
+        self.quality_slider.setValue(
+            80
+        )
+
+
+        self.quality_slider.setEnabled(True)
+
+
+
+        quality_layout.addWidget(
+            self.quality_label
+        )
+
+
+        quality_layout.addWidget(
+            self.quality_slider
+        )
+
+
+        quality_group.setLayout(
+            quality_layout
+        )
+
+
+
+
+
+        # =================================
+        # PERFORMANCE PROFILE
+        # =================================
+
+
+        profile_group = QGroupBox(
+            "Performance Profile"
+        )
+
+
+        profile_layout = QVBoxLayout()
+
+
+
+        self.fast_radio = QRadioButton(
+            "Fast Conversion"
+        )
+
+
+        self.standard_radio = QRadioButton(
+            "Standard Quality"
+        )
+
+
+        self.compression_radio = QRadioButton(
+            "Maximum Compression"
+        )
+
+
+
+        self.fast_radio.setChecked(
+            True
+        )
+
+
+
+        profile_layout.addWidget(
+            self.fast_radio
+        )
+
+
+        profile_layout.addWidget(
+            self.standard_radio
+        )
+
+
+        profile_layout.addWidget(
+            self.compression_radio
+        )
+
+
+        profile_group.setLayout(
+            profile_layout
+        )
+
+
+
+
+
+        # =================================
+        # SIGNAL CONNECTION
+        # =================================
+
+
+        self.lossy_radio.toggled.connect(
+            self.update_state
+        )
+
+
+        self.lossless_radio.toggled.connect(
+            self.update_state
+        )
+
+
+
+        self.quality_slider.valueChanged.connect(
+            self.update_quality
+        )
+
+
+
+        self.fast_radio.toggled.connect(
+            self.emit_settings
+        )
+
+
+        self.standard_radio.toggled.connect(
+            self.emit_settings
+        )
+
+
+        self.compression_radio.toggled.connect(
+            self.emit_settings
+        )
+
+
+
+
+
+        # =================================
+        # ADD COMPONENT
+        # =================================
+
+
+        layout.addWidget(
+            mode_group
+        )
+
+
+        layout.addWidget(
+            quality_group
+        )
+
+
+        layout.addWidget(
+            profile_group
+        )
+
+
+        self.setLayout(
+            layout
+        )
+
+
+
+        self.emit_settings()
+
+
+
+
+
+    # =================================
+    # STATE UPDATE
+    # =================================
+
+
+    def update_state(self):
+
+        is_lossy = self.lossy_radio.isChecked()
+
+        self.quality_group.setVisible(is_lossy)
+        self.quality_slider.setEnabled(is_lossy)
+
+        self.emit_settings()
+
+
+
+
+
+    def update_quality(
+            self,
+            value
+    ):
+
+
+        self.quality_label.setText(
+
+            f"Quality: {value}"
+
+        )
+
+
+        self.emit_settings()
+
+
+
+
+
+    # =================================
+    # PROFILE
+    # =================================
+
+
+    def get_profile(self):
+
+
+        if self.standard_radio.isChecked():
+
+            return "balanced"
+
+
+
+        if self.compression_radio.isChecked():
+
+            return "compression"
+
+
+
+        return "fast"
+
+
+
+
+
+    # =================================
+    # SETTINGS BUILDER
+    # =================================
+
+
+    def build_settings(self):
+
+
+        mode = (
+
+            "lossy"
+
+            if self.lossy_radio.isChecked()
+
+            else "lossless"
+
+        )
+
+
+
+        return {
+
+
+            "mode": mode,
+
+
+
+            # Quality hanya berlaku untuk lossy
+
+            "quality":
+
+                self.quality_slider.value()
+
+                if mode == "lossy"
+
+                else None,
+
+
+
+            "profile":
+
+                self.get_profile()
+
+        }
+
+
+
+
+
+    # =================================
+    # SIGNAL EMIT
+    # =================================
+
+
+    def emit_settings(self):
+
+
+        self.settings_changed.emit(
+
+            self.build_settings()
+
+        )
+
+
+
+
+
+    # =================================
+    # PUBLIC API
+    # =================================
+
+
+    def get_settings(self):
+
+
+        return self.build_settings()
 </file>
 
 <file path="requirements.txt">
+# GUI Framework
 PySide6
+
+# Image Processing
 Pillow
+
+# UI Theme
 qt-material
+
+# Performance Monitoring
+psutil
+
+# Application Packaging
 pyinstaller
+
+# Optional Development Tools
+# pytest
 </file>
 
 </files>
