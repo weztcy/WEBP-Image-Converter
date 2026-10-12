@@ -610,28 +610,36 @@ class ImageSection(QWidget):
     def get_images(self):
 
         return self.images
-
-
-
     def remove_selected(self):
 
-        if self.selected_image in self.images:
+        deleted = self.selected_image
+
+
+        if deleted is None:
+
+            return
+
+
+        if deleted in self.images:
 
             self.images.remove(
-                self.selected_image
+                deleted
             )
 
 
+        # ImageList.remove_selected() otomatis :
+        # - menghapus item dari list widget
+        # - memilih gambar berikutnya
+        # - emit image_selected(gambar_baru)
+        #   -> _selected() meng-update selected_image + preview
+        # - jika list kosong, emit None
+        #   -> preview kosong & selected_image = None
         self.image_list.remove_selected()
 
 
-        self.preview.show_empty()
-
-
-        self.selected_image = None
-
 
         self.update_counter()
+
 
 
 

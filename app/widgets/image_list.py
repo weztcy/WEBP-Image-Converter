@@ -445,6 +445,13 @@ class ImageList(QListWidget):
 
 
 
+        # sinkronkan currentItem (fokus keyboard) dengan item yang
+        # benar-benar diklik, supaya remove_selected selalu konsisten
+        self.setCurrentItem(
+            item
+        )
+
+
         self.current_selected_item = item
 
 
@@ -466,35 +473,101 @@ class ImageList(QListWidget):
     def remove_selected(self):
 
 
-        item = self.currentItem()
+        # gunakan item yang benar-benar aktif (hasil klik terakhir),
+        # bukan currentItem() yang hanya menandai fokus keyboard
+        item = self.current_selected_item or self.currentItem()
 
 
-        if item:
+        if item is None:
+
+            return None
 
 
-            image = item.data(100)
+        image = item.data(100)
+
+        row = self.row(
+            item
+        )
 
 
-            if image:
+        if image:
 
-                self.loaded_paths.discard(
+            self.loaded_paths.discard(
 
-                    str(image.path)
-
-                )
-
-
-
-            self.takeItem(
-
-                self.row(item)
+                str(image.path)
 
             )
 
 
-            self.current_selected_item = None
+        self.takeItem(
+
+            row
+
+        )
 
 
+        self.current_selected_item = None
+
+
+
+        # ----------------------------------------------------
+        # Tentukan gambar berikutnya yang otomatis terpilih :
+        # - item yang sekarang menempati index yang sama
+        #   (item "berikutnya" yang bergeser ke posisi item
+        #   yang dihapus)
+        # - atau item terakhir jika yang dihapus adalah item
+        #   paling akhir di list
+        # ----------------------------------------------------
+
+        next_item = None
+
+
+        if self.count() > 0:
+
+            next_index = min(
+                row,
+                self.count() - 1
+            )
+
+            next_item = self.item(
+                next_index
+            )
+
+            next_item.setSelected(
+                True
+            )
+
+            self.setCurrentItem(
+                next_item
+            )
+
+            self.scrollToItem(
+                next_item
+            )
+
+            self.current_selected_item = next_item
+
+
+        # Sinkronkan state consumer (ImageSection.selected_image
+        # dan preview) ke gambar baru secara langsung
+        if next_item is not None:
+
+            self.image_selected.emit(
+
+                next_item.data(100)
+
+            )
+
+        else:
+
+            self.image_selected.emit(
+                None
+            )
+
+
+        # kembalikan gambar yang dihapus supaya caller bisa
+        # menghapusnya dari datasource
+        return image
 
 
 

@@ -10,6 +10,8 @@ from PySide6.QtCore import (
     QSize
 )
 
+from functools import partial
+
 
 from app.core.thumbnail_cache import ThumbnailCache
 from app.core.preview_loader import PreviewLoader
@@ -35,11 +37,21 @@ class ImagePreview(QLabel):
         self.loader = None
 
 
+        # simpan referencia semua preview loader yang masih berjalan
+        # supaya tidak di-destroy oleh GC ketika thread belum selesai
+        self.loaders = []
+
+
         self.pixmap_cache = {}
 
 
 
         self.current_pixmap = None
+
+
+        # kunci gambar yang sedang diminta/ditampilkan
+        # dipakai untuk membuang hasil loader basi
+        self.current_key = None
 
 
 
@@ -122,6 +134,9 @@ class ImagePreview(QLabel):
         )
 
 
+        self.current_key = key
+
+
 
         # CACHE
 
@@ -146,8 +161,11 @@ class ImagePreview(QLabel):
 
         if self.loader:
 
-            self.loader.quit()
+            self.loaders.append(
+                self.loader
+            )
 
+            self.loader.quit()
 
 
         self.loader = PreviewLoader(
@@ -158,6 +176,20 @@ class ImagePreview(QLabel):
 
         )
 
+
+        self.loader.finished.connect(
+
+            partial(
+                self.remove_loader,
+                self.loader
+            )
+
+        )
+
+
+        self.loaders.append(
+            self.loader
+        )
 
 
         self.loader.preview_ready.connect(
@@ -181,6 +213,40 @@ class ImagePreview(QLabel):
 
 
 
+# ==========================
+# CLEANUP LOADER
+# ==========================
+
+
+    def remove_loader(
+            self,
+            loader
+    ):
+
+
+        # jika loader yang selesai adalah loader yang sedang dipakai,
+        # lepaskan referensinya dulu supaya show_image() tidak menyentuh
+        # objek yang sudah di-deleteLater()
+
+        if loader is self.loader:
+
+            self.loader = None
+
+
+        if loader in self.loaders:
+
+            self.loaders.remove(
+                loader
+            )
+
+
+        loader.deleteLater()
+
+
+
+
+
+
     # ==========================
     # SET PREVIEW
     # ==========================
@@ -195,13 +261,23 @@ class ImagePreview(QLabel):
 
         if pixmap.isNull():
 
-            self.show_empty()
+            if key == self.current_key:
+
+                self.show_empty()
 
             return
 
 
 
         self.pixmap_cache[key] = pixmap
+
+
+        # loader lama (basi) tidak boleh menimpa preview
+        # yang sedang ditampilkan untuk gambar lain
+
+        if key != self.current_key:
+
+            return
 
 
         self.current_pixmap = pixmap
@@ -277,6 +353,9 @@ class ImagePreview(QLabel):
 
 
         self.current_pixmap = None
+
+
+        self.current_key = None
 
 
         self.clear()
