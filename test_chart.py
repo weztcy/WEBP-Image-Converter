@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QApplication
 
-from app.widgets.resource_chart import ResourceChart
+from app.ui.widgets.resource_chart import ResourceChart
 
 from app.core.system_monitor import SystemMonitor
 

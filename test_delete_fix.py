@@ -22,9 +22,9 @@ from PIL import Image
 
 
 from app.models.image_model import ImageModel
-from app.widgets.image_list import ImageList
-from app.widgets.image_preview import ImagePreview
-from app.components.image_section import ImageSection
+from app.ui.widgets.image_list import ImageList
+from app.ui.widgets.image_preview import ImagePreview
+from app.ui.widgets.image_section import ImageSection
 
 
 

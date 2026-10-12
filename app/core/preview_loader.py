@@ -5,12 +5,6 @@ from PySide6.QtCore import (
 
 from PySide6.QtGui import QPixmap
 
-
-from app.core.thumbnail_cache import ThumbnailCache
-
-
-
-
 class PreviewLoader(QThread):
 
 

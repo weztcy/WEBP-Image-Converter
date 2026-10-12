@@ -1,0 +1,1 @@
+"""Business logic layer: image library and conversion orchestration."""

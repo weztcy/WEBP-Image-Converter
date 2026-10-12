@@ -1,0 +1,1 @@
+"""UI layer: windows (top-level pages) and reusable widgets."""

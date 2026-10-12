@@ -1,0 +1,350 @@
+from PySide6.QtWidgets import QLabel
+
+from PySide6.QtCore import (
+    Qt,
+    QSize
+)
+
+from functools import partial
+
+
+from app.core.thumbnail_cache import ThumbnailCache
+from app.core.preview_loader import PreviewLoader
+
+
+
+
+
+from app.styles.theme import THEME
+
+class ImagePreview(QLabel):
+
+
+    def __init__(self):
+
+        super().__init__()
+
+
+
+        self.preview_cache = ThumbnailCache(
+            size=600
+        )
+
+
+        self.loader = None
+
+
+        # simpan referencia semua preview loader yang masih berjalan
+        # supaya tidak di-destroy oleh GC ketika thread belum selesai
+        self.loaders = []
+
+
+        self.pixmap_cache = {}
+
+
+
+        self.current_pixmap = None
+
+
+        # kunci gambar yang sedang diminta/ditampilkan
+        # dipakai untuk membuang hasil loader basi
+        self.current_key = None
+
+
+
+        # ==========================
+        # PREMIUM PREVIEW STYLE
+        # ==========================
+
+
+        self.setStyleSheet(
+            THEME["image_preview"]
+        )
+
+
+
+        self.setAlignment(
+            Qt.AlignCenter
+        )
+
+
+        # 16:10 ratio base
+
+        self.setMinimumSize(
+            QSize(
+                480,
+                300
+            )
+        )
+
+
+        self.setMaximumHeight(
+            360
+        )
+
+
+        self.show_empty()
+
+
+
+
+
+    # ==========================
+    # SHOW IMAGE
+    # ==========================
+
+
+    def show_image(
+            self,
+            image
+    ):
+
+
+        if image is None:
+
+            self.show_empty()
+
+            return
+
+
+
+        key = str(
+            image.path
+        )
+
+
+        self.current_key = key
+
+
+
+        # CACHE
+
+        if key in self.pixmap_cache:
+
+
+            self.current_pixmap = (
+                self.pixmap_cache[key]
+            )
+
+
+            self.update_preview_size()
+
+            return
+
+
+
+
+
+        # ASYNC LOAD
+
+
+        if self.loader:
+
+            self.loaders.append(
+                self.loader
+            )
+
+            self.loader.quit()
+
+
+        self.loader = PreviewLoader(
+
+            image,
+
+            self.preview_cache
+
+        )
+
+
+        self.loader.finished.connect(
+
+            partial(
+                self.remove_loader,
+                self.loader
+            )
+
+        )
+
+
+        self.loaders.append(
+            self.loader
+        )
+
+
+        self.loader.preview_ready.connect(
+
+            lambda pixmap:
+
+            self.set_preview(
+
+                key,
+
+                pixmap
+
+            )
+
+        )
+
+
+        self.loader.start()
+
+
+
+
+
+# ==========================
+# CLEANUP LOADER
+# ==========================
+
+
+    def remove_loader(
+            self,
+            loader
+    ):
+
+
+        # jika loader yang selesai adalah loader yang sedang dipakai,
+        # lepaskan referensinya dulu supaya show_image() tidak menyentuh
+        # objek yang sudah di-deleteLater()
+
+        if loader is self.loader:
+
+            self.loader = None
+
+
+        if loader in self.loaders:
+
+            self.loaders.remove(
+                loader
+            )
+
+
+        loader.deleteLater()
+
+
+
+
+
+
+    # ==========================
+    # SET PREVIEW
+    # ==========================
+
+
+    def set_preview(
+            self,
+            key,
+            pixmap
+    ):
+
+
+        if pixmap.isNull():
+
+            if key == self.current_key:
+
+                self.show_empty()
+
+            return
+
+
+
+        self.pixmap_cache[key] = pixmap
+
+
+        # loader lama (basi) tidak boleh menimpa preview
+        # yang sedang ditampilkan untuk gambar lain
+
+        if key != self.current_key:
+
+            return
+
+
+        self.current_pixmap = pixmap
+
+
+        self.update_preview_size()
+
+
+
+
+
+    # ==========================
+    # KEEP RATIO
+    # ==========================
+
+
+    def update_preview_size(self):
+
+
+        if self.current_pixmap is None:
+
+            return
+
+
+
+        scaled = self.current_pixmap.scaled(
+
+            self.size(),
+
+            Qt.KeepAspectRatio,
+
+            Qt.SmoothTransformation
+
+        )
+
+
+        self.setPixmap(
+            scaled
+        )
+
+
+
+
+
+    # ==========================
+    # RESIZE EVENT
+    # ==========================
+
+
+    def resizeEvent(
+            self,
+            event
+    ):
+
+
+        self.update_preview_size()
+
+
+        super().resizeEvent(
+            event
+        )
+
+
+
+
+
+    # ==========================
+    # EMPTY STATE
+    # ==========================
+
+
+    def show_empty(self):
+
+
+        self.current_pixmap = None
+
+
+        self.current_key = None
+
+
+        self.clear()
+
+
+        self.setText(
+            "🖼\n\nImage Preview\n\nSelect an image to preview"
+        )
+
+
+        self.setAlignment(
+            Qt.AlignCenter
+        )

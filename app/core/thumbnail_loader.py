@@ -4,12 +4,6 @@ from PySide6.QtCore import (
 )
 
 
-from app.core.thumbnail_cache import ThumbnailCache
-
-
-
-
-
 class ThumbnailLoader(QThread):
 
 

@@ -5,7 +5,7 @@ import psutil
 
 
 from app.core.process_pool import ProcessPoolManager
-from app.core.image_loader import load_folder
+from app.services.image_service import load_folder
 
 
 

@@ -1,0 +1,1 @@
+"""Centralized styling: colors, fonts, dimensions, and theme QSS."""
