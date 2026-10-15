@@ -167,6 +167,37 @@ python test_delete_fix.py
 
 ---
 
+## Build Executable (PyInstaller)
+
+The app is packaged as a single portable `.exe` (no console window) with the
+provided PyInstaller spec file. `pyinstaller` is already listed in
+`requirements.txt`.
+
+```powershell
+# 1. (once) generate the application icon used by the build
+python assets\generate_icon.py
+
+# 2. build the single-file executable
+pyinstaller --noconfirm --clean Image2WEBP-Converter.spec
+```
+
+The result is `dist\Image2WEBP-Converter.exe` (~68 MB) which can be copied
+and run standalone on any 64-bit Windows machine.
+
+### Packaging notes
+
+- `main.py` calls `multiprocessing.freeze_support()` — required because the
+  conversion engine runs a `ProcessPoolExecutor` and on Windows the spawned
+  workers restart the frozen executable.
+- The icon (`assets\app_icon.ico`) and Windows version metadata
+  (`version_info.txt`) are embedded into the executable by the spec file.
+- The build is **one-file mode**: everything (Python, PySide6, Pillow,
+  psutil, pyqtgraph) is bundled inside the single `.exe`; the first launch
+  unpacks to a temporary folder, so startup is slightly slower than running
+  `python main.py`.
+
+---
+
 ## Performance Example
 
 Test environment:
