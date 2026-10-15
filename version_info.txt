@@ -15,12 +15,12 @@ VSVersionInfo(
                 StringTable(
                     "040904B0",
                     [
-                        StringStruct("CompanyName", "Image2WEBP"),
+                        StringStruct("CompanyName", "WEBP"),
                         StringStruct("FileDescription", "WEBP Converter Pro"),
                         StringStruct("FileVersion", "1.0.0"),
-                        StringStruct("InternalName", "Image2WEBP-Converter"),
+                        StringStruct("InternalName", "WEBP-Converter"),
                         StringStruct("LegalCopyright", "Copyright (c) 2026"),
-                        StringStruct("OriginalFilename", "Image2WEBP-Converter.exe"),
+                        StringStruct("OriginalFilename", "WEBP-Converter.exe"),
                         StringStruct("ProductName", "WEBP Converter Pro"),
                         StringStruct("ProductVersion", "1.0.0"),
                     ],

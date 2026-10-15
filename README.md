@@ -1,8 +1,8 @@
-# Image2WEBP Converter
+# WEBP Converter Pro
 
 A high-performance desktop application for converting JPG, JPEG, and PNG images into optimized WEBP format.
 
-Built with Python and PySide6, Image2WEBP Converter provides fast batch processing, configurable compression, and real-time conversion monitoring.
+Built with Python and PySide6, WEBP Converter Pro provides fast batch processing, configurable compression, and real-time conversion monitoring.
 
 ---
 
@@ -178,10 +178,10 @@ provided PyInstaller spec file. `pyinstaller` is already listed in
 python assets\generate_icon.py
 
 # 2. build the single-file executable
-pyinstaller --noconfirm --clean Image2WEBP-Converter.spec
+pyinstaller --noconfirm --clean WEBP-Converter.spec
 ```
 
-The result is `dist\Image2WEBP-Converter.exe` (~68 MB) which can be copied
+The result is `dist\WEBP-Converter.exe` (~68 MB) which can be copied
 and run standalone on any 64-bit Windows machine.
 
 ### Packaging notes

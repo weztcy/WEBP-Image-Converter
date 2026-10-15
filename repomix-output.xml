@@ -11175,7 +11175,7 @@ from pathlib import Path
 
 
 
-APP_NAME = "Image2WEBP Converter"
+APP_NAME = "WEBP Converter"
 
 APP_VERSION = "1.0.0"
 
@@ -11186,7 +11186,7 @@ def get_default_output():
     pictures = Path.home() / "Pictures"
 
 
-    output = pictures / "Image2WEBP"
+    output = pictures / "WEBP"
 
 
 
@@ -14101,11 +14101,11 @@ class ImageModel:
 </file>
 
 <file path="README.md">
-# Image2WEBP Converter
+# WEBP Converter
 
 A high-performance desktop application for converting JPG, JPEG, and PNG images into optimized WEBP format.
 
-Built with Python and PySide6, Image2WEBP Converter provides fast batch processing, configurable compression, and real-time conversion monitoring.
+Built with Python and PySide6, WEBP Converter provides fast batch processing, configurable compression, and real-time conversion monitoring.
 
 ---
 
