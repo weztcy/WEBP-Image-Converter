@@ -178,10 +178,10 @@ provided PyInstaller spec file. `pyinstaller` is already listed in
 python assets\generate_icon.py
 
 # 2. build the single-file executable
-pyinstaller --noconfirm --clean WEBP-Converter.spec
+pyinstaller --noconfirm --clean WEBP Converter Pro.spec
 ```
 
-The result is `dist\WEBP-Converter.exe` (~68 MB) which can be copied
+The result is `dist\WEBP Converter Pro.exe` (~68 MB) which can be copied
 and run standalone on any 64-bit Windows machine.
 
 ### Packaging notes
